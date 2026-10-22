@@ -2,14 +2,17 @@
 
 Every package and function, documented here instead of in code comments. Each entry covers what it does, its inputs and outputs, and why it's built that way.
 
-## cmd/coordinator
+| Package | What it does |
+|---|---|
+| [internal/warc](warc.md) | Reads raw records out of a WARC/WAT file |
+| [internal/wat](wat.md) | Parses a WAT record's JSON into a page with its links |
+| [internal/links](links.md) | Turns URLs into domains, picks which links count, and builds the link graph |
+| [internal/extract](extract.md) | Runs a whole WAT file through a pool of parser goroutines |
+| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker` |
 
-### `main()`
+## How the packages connect
 
-Entry point for the coordinator binary. Currently a placeholder that prints that it isn't implemented yet; the real coordinator arrives in stage 2.
-
-## cmd/worker
-
-### `main()`
-
-Entry point for the worker binary. Currently a placeholder that prints that it isn't implemented yet; the real worker arrives in stages 1–2.
+```
+.wat.gz file → gzip → warc.Reader.Next() → wat.ParsePage() → links.Extract() → links.Graph.Add() → Graph.Edges()
+                      └──────────────────── all orchestrated by extract.Run() ───────────────────┘
+```

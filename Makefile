@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt up down clean
+.PHONY: build test lint fmt up down clean sample
 
 build:
 	go build -o bin/ ./cmd/...
@@ -21,3 +21,10 @@ down:
 
 clean:
 	rm -rf bin/
+
+CRAWL ?= CC-MAIN-2026-43
+
+sample:
+	mkdir -p data
+	curl -fsSL https://data.commoncrawl.org/crawl-data/$(CRAWL)/wat.paths.gz | gunzip | head -1 \
+		| xargs -I{} curl -fSL -o data/sample.warc.wat.gz https://data.commoncrawl.org/{}
