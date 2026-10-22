@@ -1,0 +1,9 @@
+# Build output
+/bin/
+
+# Downloaded Common Crawl files and pipeline output
+/data/
+
+# Local environment
+.env
+.DS_Store

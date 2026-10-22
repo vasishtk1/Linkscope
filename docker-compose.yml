@@ -1,0 +1,11 @@
+services:
+  coordinator:
+    build: .
+    command: ["coordinator"]
+
+  worker:
+    build: .
+    command: ["worker"]
+    depends_on: [coordinator]
+    deploy:
+      replicas: 3
