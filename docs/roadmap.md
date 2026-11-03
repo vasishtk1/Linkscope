@@ -4,8 +4,8 @@
 |---|---|---|
 | 0 | Setup: repo structure, docs, Docker, CI | ✅ Done |
 | 1 | Single-file extractor: parse one WAT file into domain-to-domain links | ✅ Done |
-| 2 | Distributed workers: coordinator, job leases, retries, per-job output | Next |
-| 3 | Chaos test: kill workers mid-run; output must match a clean run | |
+| 2 | Distributed workers: coordinator, job leases, retries, per-job output | ✅ Done |
+| 3 | Chaos test: kill workers mid-run; output must match a clean run | Next |
 | 4 | Merge + PageRank; validate against Common Crawl's published host ranks | |
 | 5 | Sharded index + API; load test | |
 | 6 | Web app: search, score, link graph, pipeline dashboard | |

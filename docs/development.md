@@ -13,10 +13,33 @@
 | `make test` | Runs all tests with the race detector on |
 | `make lint` | Runs `go vet` and fails if any file isn't `gofmt`-formatted |
 | `make fmt` | Formats all Go files |
-| `make up` | Builds the Docker image and starts 1 coordinator + 3 workers |
+| `make up` | Builds the Docker image and starts 1 coordinator + 4 workers (`FILES=50 WORKERS=6 make up` to change) |
 | `make down` | Stops the Docker cluster |
 | `make clean` | Deletes `bin/` |
 | `make sample` | Downloads the first WAT file of the crawl in `CRAWL` (default `CC-MAIN-2026-43`) to `data/sample.warc.wat.gz` |
+
+## Running a cluster without Docker
+
+```sh
+make build
+./bin/coordinator -limit 20 &                       # queue 20 files
+for i in 1 2 3 4; do ./bin/worker -id w$i -parsers 2 & done
+curl -s localhost:8080/status                       # watch progress
+```
+
+Workers exit on their own once every job is done or failed. Stop the coordinator with Ctrl+C (or `kill`).
+
+## Running a cluster in Docker
+
+```sh
+make up                       # 1 coordinator + 4 workers, 20 files
+FILES=50 WORKERS=6 make up    # more files, more workers
+make down
+```
+
+Everything is stored under `data/cluster/`: the job database (`jobs.db`) and the results (`results/*.edges.tsv.gz`). The job database persists between runs, so running `make up` again only processes jobs that aren't done yet. Delete `data/cluster/` to start over.
+
+The build context excludes `data/`, `bin/`, and docs (`.dockerignore`), so building the image doesn't upload downloaded crawl files to Docker.
 
 ## CI
 

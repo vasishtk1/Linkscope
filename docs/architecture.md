@@ -42,10 +42,69 @@ Details in [reference/extract.md](reference/extract.md).
 | Index + API | Stores backlinks split across shards; answers "who links to this domain?" quickly | 5 |
 | Web app | URL search, authority score, interactive link graph, live pipeline dashboard | 6 |
 
-## Fault tolerance (stage 2–3)
+## Stage 2: coordinator and workers
 
-Workers can crash at any point. The design goals:
+```
+                         ┌────────────────────────────┐
+                         │        Coordinator         │
+                         │  HTTP API  +  SQLite jobs  │
+                         │  lease reaper (every 1s)   │
+                         └──────▲──────────────▲──────┘
+             claim / heartbeat /│              │ complete / fail / release
+                                │              │
+          ┌─────────────────────┴───┐      ┌───┴─────────────────────┐
+          │ Worker 1                │ ...  │ Worker N                │
+          │  stream WAT from CC  ──▶│      │  stream WAT from CC  ──▶│
+          │  extract (stage 1)   ──▶│      │  extract (stage 1)   ──▶│
+          │  write result atomically│      │  write result atomically│
+          └───────────┬─────────────┘      └────────────┬────────────┘
+                      ▼                                 ▼
+               results/<file>.edges.tsv.gz  (one per job, shared folder)
+```
 
-- A job held by a crashed worker is eventually given to another worker
-- A job that runs twice produces the same output, written once, so nothing is double-counted
-- A run with random worker crashes produces exactly the same final output as a clean run
+Each Common Crawl file is one job. A worker:
+
+1. **Claims** a job and gets a 60s lease
+2. **Streams** the file from Common Crawl straight into the extractor, without saving the download
+3. **Heartbeats** every 20s to keep the lease. If the coordinator answers "lease lost," the worker cancels the download and moves on
+4. **Writes** `<file>.edges.tsv.gz` via temp file, fsync, and atomic rename
+5. **Reports** complete, fail, or (on shutdown) release, then claims the next job
+6. **Exits** once the coordinator says nothing is left to do
+
+Details: [reference/jobs.md](reference/jobs.md), [reference/coordinator.md](reference/coordinator.md), [reference/worker.md](reference/worker.md).
+
+### Failure handling
+
+| What goes wrong | What happens |
+|---|---|
+| Worker crashes or freezes | Its heartbeats stop, the lease expires, and the job returns to the queue for another worker |
+| Frozen worker wakes up later | Its attempt number is out of date, so its heartbeats get `409`; it abandons the job |
+| Two workers both finish the same job | Same output file, same bytes; the second completion is ignored |
+| Crash while writing a result | Only a temp file is affected; the real file is never half-written |
+| Common Crawl returns 503 / network blip | The download retries with backoff (1s, 2s, 4s) |
+| Common Crawl never starts sending | Cancelled after 30s and retried |
+| Download goes silent partway through | Cancelled after 20s with no data and retried from the start, inside the same job attempt |
+| Coordinator freezes (connection open, no answer) | Every worker request has a 20s limit; a timeout is treated like the coordinator being down, and the worker retries |
+| A worker freezes mid-request to the coordinator | The coordinator's HTTP server drops requests that take more than 20s to read or answer |
+| File is missing (404) | Fails immediately, no pointless retries |
+| File is corrupt | Fails each attempt; marked `failed` after 3 and reported on `/status` |
+| Coordinator restarts | Jobs are in SQLite, so nothing is lost; workers keep retrying until it's back |
+| Worker stopped with Ctrl+C | Hands its job back immediately without using up an attempt |
+
+### Measured (20 files, Oct 2026 crawl, MacBook on home internet)
+
+| | 1 worker | 4 workers |
+|---|---|---|
+| Wall time | 206s | 103s |
+| Pages processed | 441,193 | 441,193 |
+| Cross-domain links | 5,269,606 | 5,269,606 |
+| Per-file edges (summed across files) | 2,528,210 | 2,528,210 |
+| Result files | 20, 70 MB gzipped | 20, byte-identical to the 1-worker run |
+
+With 4 workers, each job took 13–33s (avg 20s), versus ~8s when running alone. Four downloads at once reached ~29 MB/s total, about the same as a single download, so the home connection is the limit at this point. On cloud machines in the same region as Common Crawl's storage (AWS us-east-1), bandwidth per machine is much higher, so adding workers should keep helping. Stage 7 will measure this.
+
+The edge totals above are summed per file. The same `a.com → b.com` pair can appear in several files; combining them into unique edges is the merge step in stage 4.
+
+## Fault tolerance tests (stage 3)
+
+Stage 2 covers each failure above with an automated test (see the table in [reference/worker.md](reference/worker.md)). Stage 3 goes further: randomly killing workers during real runs and proving the final output matches a clean run byte for byte.

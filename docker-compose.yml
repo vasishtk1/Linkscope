@@ -1,11 +1,15 @@
 services:
   coordinator:
     build: .
-    command: ["coordinator"]
+    image: linkscope:dev
+    command: ["coordinator", "-addr", ":8080", "-db", "/data/cluster/jobs.db", "-limit", "${FILES:-20}"]
+    volumes: ["./data:/data"]
+    ports: ["8080:8080"]
 
   worker:
-    build: .
-    command: ["worker"]
+    image: linkscope:dev
+    command: ["worker", "-coordinator", "http://coordinator:8080", "-out", "/data/cluster/results", "-parsers", "2"]
+    volumes: ["./data:/data"]
     depends_on: [coordinator]
     deploy:
-      replicas: 3
+      replicas: ${WORKERS:-4}
