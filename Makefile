@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt up down clean sample
+.PHONY: build test lint fmt up down clean sample sample-edges web
 
 build:
 	go build -o bin/ ./cmd/...
@@ -28,3 +28,9 @@ sample:
 	mkdir -p data
 	curl -fsSL https://data.commoncrawl.org/crawl-data/$(CRAWL)/wat.paths.gz | gunzip | head -1 \
 		| xargs -I{} curl -fSL -o data/sample.warc.wat.gz https://data.commoncrawl.org/{}
+
+sample-edges: build
+	./bin/extract -o data/sample.edges.tsv -top 0 data/sample.warc.wat.gz
+
+web: sample-edges
+	cd web && npm install && npm run dev

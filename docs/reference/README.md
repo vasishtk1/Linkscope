@@ -12,6 +12,7 @@ Every package and function, documented here instead of in code comments. Each en
 | [internal/coordinator, internal/api](coordinator.md) | The coordinator's HTTP API and the request/response types |
 | [internal/worker](worker.md) | The worker loop: claim, download, extract, save, report, heartbeat |
 | [internal/fixture](#internalfixture) | Builds fake Common Crawl files for tests |
+| [web/](web.md) | The website: pages, API routes, animated graph |
 | [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker` |
 
 ## How the packages connect
