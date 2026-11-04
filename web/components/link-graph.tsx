@@ -27,9 +27,8 @@ type Node = SimulationNodeDatum & {
 };
 type Link = SimulationLinkDatum<Node> & { nofollow: boolean; born: number };
 
-const MAX_NODES = 200;
 const DEFAULT_NODES = 60;
-const MIN_NODES = 10;
+const MIN_NODES = 0;
 const ADD_EVERY_MS = 60;
 const GROW_MS = 450;
 
@@ -40,7 +39,7 @@ export function LinkGraph({ domain, backlinks }: { domain: string; backlinks: Ba
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hover, setHover] = useState<Hover>(null);
   const [added, setAdded] = useState(0);
-  const maxShown = Math.min(backlinks.length, MAX_NODES);
+  const maxShown = backlinks.length;
   const [limit, setLimit] = useState(Math.min(DEFAULT_NODES, maxShown));
   const limitRef = useRef(limit);
   const resetRef = useRef<() => void>(() => {});
@@ -86,7 +85,7 @@ export function LinkGraph({ domain, backlinks }: { domain: string; backlinks: Ba
       .alphaDecay(0.02);
 
     // Grows or shrinks the graph toward the slider's value, strongest sites first, so it builds in front of the user.
-    const list = backlinks.slice(0, MAX_NODES);
+    const list = backlinks;
     const step = () => {
       const target = Math.min(limitRef.current, list.length);
       const have = nodes.length - 1;
@@ -313,7 +312,9 @@ export function LinkGraph({ domain, backlinks }: { domain: string; backlinks: Ba
           <span className={`size-2 rounded-full ${building ? "animate-pulse bg-blue-400" : "bg-emerald-400"}`} />
           {building
             ? `Mapping backlinks… ${added} / ${shown}`
-            : `Top ${shown} of ${backlinks.length.toLocaleString()} linking sites`}
+            : shown === backlinks.length
+              ? `All ${shown.toLocaleString()} linking sites`
+              : `Top ${shown.toLocaleString()} of ${backlinks.length.toLocaleString()} linking sites`}
         </div>
 
         <div className="absolute right-4 top-3 flex flex-wrap items-center justify-end gap-3 rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-xs text-zinc-400 backdrop-blur">
