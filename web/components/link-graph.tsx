@@ -329,7 +329,7 @@ export function LinkGraph({ domain, backlinks }: { domain: string; backlinks: Ba
                 onChange={(e) => setLimit(Number(e.target.value))}
                 className="w-32 accent-blue-500"
               />
-              <span className="w-8 text-right font-mono text-zinc-200 tabular-nums">{limit}</span>
+              <NodeCount value={limit} min={MIN_NODES} max={maxShown} onChange={setLimit} />
             </label>
           )}
           <button
@@ -371,6 +371,51 @@ export function LinkGraph({ domain, backlinks }: { domain: string; backlinks: Ba
         </a>
       </div>
     </section>
+  );
+}
+
+// NodeCount shows the slider's value as text that turns into an editable box on hover and focus.
+function NodeCount({
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  onChange: (n: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const commit = () => {
+    if (draft === null) return;
+    const n = Math.round(Number(draft));
+    if (draft.trim() !== "" && Number.isFinite(n)) onChange(Math.min(max, Math.max(min, n)));
+    setDraft(null);
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      aria-label={`Sites shown, ${min} to ${max}`}
+      value={draft ?? String(value)}
+      onFocus={(e) => {
+        setDraft(String(value));
+        e.target.select();
+      }}
+      onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ""))}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          setDraft(null);
+          e.currentTarget.blur();
+        }
+      }}
+      className="w-11 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-right font-mono text-zinc-200 tabular-nums outline-none transition hover:border-zinc-600 hover:bg-zinc-900 focus:border-blue-500 focus:bg-zinc-900"
+    />
   );
 }
 
