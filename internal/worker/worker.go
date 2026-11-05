@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"path"
@@ -33,6 +34,8 @@ type Config struct {
 	// FetchRetries is how many times a download is retried before the job is failed.
 	FetchRetries int
 	RetryBackoff time.Duration
+	// BusyBackoff is the first wait after Common Crawl answers 429 or 503 ("slow down").
+	BusyBackoff time.Duration
 	// RequestTimeout limits each call to the coordinator.
 	RequestTimeout time.Duration
 	// FirstByteTimeout limits how long Common Crawl can take to start sending a file.
@@ -60,6 +63,9 @@ func New(cfg Config) *Worker {
 	}
 	if cfg.RetryBackoff == 0 {
 		cfg.RetryBackoff = time.Second
+	}
+	if cfg.BusyBackoff == 0 {
+		cfg.BusyBackoff = 15 * time.Second
 	}
 	if cfg.Parsers < 1 {
 		cfg.Parsers = 1
@@ -173,15 +179,22 @@ func (w *Worker) heartbeat(ctx context.Context, j api.Job, lost *atomic.Bool, ca
 // runJob downloads and extracts a file, starting over if the download breaks partway through.
 func (w *Worker) runJob(ctx context.Context, j api.Job) (jobs.Result, error) {
 	url := strings.TrimRight(w.cfg.Source, "/") + "/" + strings.TrimLeft(j.Path, "/")
-	backoff := w.cfg.RetryBackoff
+	backoff, busyBackoff := w.cfg.RetryBackoff, w.cfg.BusyBackoff
 	var lastErr error
+	var lastBusy bool
 	for try := 0; try <= w.cfg.FetchRetries; try++ {
 		if try > 0 {
-			w.cfg.Logf("download retry %d/%d in %s: %v", try, w.cfg.FetchRetries, backoff, lastErr)
-			if !sleep(ctx, backoff) {
+			wait := backoff
+			if lastBusy {
+				wait = jitter(busyBackoff)
+				busyBackoff = min(busyBackoff*2, maxBusyBackoff)
+			} else {
+				backoff *= 2
+			}
+			w.cfg.Logf("download retry %d/%d in %s: %v", try, w.cfg.FetchRetries, wait.Round(time.Millisecond), lastErr)
+			if !sleep(ctx, wait) {
 				return jobs.Result{}, ctx.Err()
 			}
-			backoff *= 2
 		}
 		res, err := w.attempt(ctx, url, j.Path)
 		if err == nil {
@@ -194,9 +207,16 @@ func (w *Worker) runJob(ctx context.Context, j api.Job) (jobs.Result, error) {
 		if !errors.As(err, &de) {
 			return jobs.Result{}, err
 		}
-		lastErr = err
+		lastErr, lastBusy = err, de.busy
 	}
 	return jobs.Result{}, lastErr
+}
+
+const maxBusyBackoff = 2 * time.Minute
+
+// jitter picks a wait between half and all of d, so workers that were turned away together don't all come back together.
+func jitter(d time.Duration) time.Duration {
+	return d/2 + rand.N(d/2+1)
 }
 
 func (w *Worker) attempt(ctx context.Context, url, watPath string) (jobs.Result, error) {
@@ -217,8 +237,11 @@ func (w *Worker) attempt(ctx context.Context, url, watPath string) (jobs.Result,
 	return jobs.Result{Pages: stats.PagesUsed, CrossLinks: stats.CrossLinks, Edges: len(edges)}, nil
 }
 
-// downloadError marks failures worth retrying: network errors, timeouts, 429 and 5xx responses.
-type downloadError struct{ err error }
+// downloadError marks failures worth retrying; busy means the server asked us to slow down.
+type downloadError struct {
+	err  error
+	busy bool
+}
 
 func (e *downloadError) Error() string { return e.err.Error() }
 func (e *downloadError) Unwrap() error { return e.err }
@@ -243,15 +266,16 @@ func (w *Worker) open(ctx context.Context, url string) (io.ReadCloser, error) {
 		if wd.fired.Load() {
 			err = fmt.Errorf("download %s: no response within %s", url, w.cfg.FirstByteTimeout)
 		}
-		return nil, &downloadError{err}
+		return nil, &downloadError{err: err}
 	}
 	wd.timer.Stop()
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
 		wd.stop()
 		err := fmt.Errorf("download %s: %s", url, resp.Status)
-		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-			return nil, &downloadError{err}
+		busy := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable
+		if busy || resp.StatusCode >= 500 {
+			return nil, &downloadError{err: err, busy: busy}
 		}
 		return nil, err
 	}
@@ -287,7 +311,7 @@ func (d *watchdog) Read(p []byte) (int, error) {
 		if d.fired.Load() {
 			err = fmt.Errorf("download stalled: no data for %s", d.stall)
 		}
-		return n, &downloadError{err}
+		return n, &downloadError{err: err}
 	}
 	return n, err
 }

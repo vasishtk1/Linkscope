@@ -117,7 +117,7 @@ func (c *cluster) worker(id string) *worker.Worker {
 	cfg := worker.Config{
 		ID: id, Coordinator: c.coord.URL, Source: c.srcSrv.URL, OutDir: c.out,
 		Parsers: 2, PollInterval: 10 * time.Millisecond,
-		FetchRetries: 3, RetryBackoff: 5 * time.Millisecond,
+		FetchRetries: 3, RetryBackoff: 5 * time.Millisecond, BusyBackoff: 5 * time.Millisecond,
 		Logf: func(f string, a ...any) { c.t.Logf(id+" "+f, a...) },
 	}
 	if c.tune != nil {
@@ -228,6 +228,60 @@ func TestFlakyDownloadIsRetried(t *testing.T) {
 	}
 	if calls.Load() != 3 {
 		t.Fatalf("downloads = %d, want 3", calls.Load())
+	}
+}
+
+func TestBusyServerGetsLongerWaits(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		status  int
+		minWait time.Duration
+	}{
+		// Busy waits are 200ms then 400ms, each cut by up to half by jitter: at least 100ms + 200ms.
+		{"503 slow down", http.StatusServiceUnavailable, 300 * time.Millisecond},
+		{"429 too many requests", http.StatusTooManyRequests, 300 * time.Millisecond},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newCluster(t, 1, time.Second, 1)
+			c.tune = func(cfg *worker.Config) { cfg.BusyBackoff = 200 * time.Millisecond }
+			var calls atomic.Int32
+			c.src.hook = func(w http.ResponseWriter, r *http.Request) bool {
+				if calls.Add(1) <= 2 {
+					http.Error(w, "slow down", tc.status)
+					return true
+				}
+				return false
+			}
+			start := time.Now()
+			c.runWorkers(1)
+			if took := time.Since(start); took < tc.minWait {
+				t.Fatalf("finished in %s, want at least %s of waiting", took, tc.minWait)
+			}
+			if sum := c.summary(); sum.Done != 1 {
+				t.Fatalf("summary = %+v", sum)
+			}
+		})
+	}
+}
+
+func TestOtherServerErrorsKeepShortWaits(t *testing.T) {
+	c := newCluster(t, 1, time.Second, 1)
+	c.tune = func(cfg *worker.Config) { cfg.BusyBackoff = 10 * time.Second }
+	var calls atomic.Int32
+	c.src.hook = func(w http.ResponseWriter, r *http.Request) bool {
+		if calls.Add(1) <= 2 {
+			http.Error(w, "oops", http.StatusInternalServerError)
+			return true
+		}
+		return false
+	}
+	start := time.Now()
+	c.runWorkers(1)
+	if took := time.Since(start); took > 5*time.Second {
+		t.Fatalf("a 500 used the long busy wait (took %s)", took)
+	}
+	if sum := c.summary(); sum.Done != 1 {
+		t.Fatalf("summary = %+v", sum)
 	}
 }
 
@@ -365,7 +419,7 @@ func TestWorkerRetriesWhileCoordinatorIsDown(t *testing.T) {
 
 	w := worker.New(worker.Config{
 		ID: "early", Coordinator: down.URL, Source: c.srcSrv.URL, OutDir: c.out,
-		PollInterval: 10 * time.Millisecond, RetryBackoff: 5 * time.Millisecond,
+		PollInterval: 10 * time.Millisecond, RetryBackoff: 5 * time.Millisecond, BusyBackoff: 5 * time.Millisecond,
 		Logf: t.Logf,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

@@ -94,8 +94,8 @@ Each entry: what was decided, the alternatives, and why.
 
 ## Retry policy
 
-- **Decision:** downloads retry in the worker with exponential backoff (1s, 2s, 4s) on network errors, `429`, and `5xx`, but not on other `4xx`. Whole jobs get 3 attempts through the coordinator. Workers retry the coordinator itself indefinitely, with backoff capped at 30s.
-- **Why:** these are different kinds of failure. A `503` from Common Crawl is usually gone in seconds, so a quick local retry is cheapest. A `404` won't fix itself, so retrying wastes time. A file that's corrupt fails the same way every time, so after 3 tries it's marked failed instead of looping forever. The coordinator being down is temporary by definition (it's restarting), so workers wait for it.
+- **Decision:** downloads retry in the worker with exponential backoff (1s, 2s, 4s…) on network errors and `5xx`, but not on other `4xx`. When Common Crawl says it's busy (`429` or `503`), the waits are much longer (about 15s, 30s, 60s, then 2 minutes) and randomized. Whole jobs get 3 attempts through the coordinator. Workers retry the coordinator itself indefinitely, with backoff capped at 30s.
+- **Why:** these are different kinds of failure. A network blip is usually gone in seconds, so a quick local retry is cheapest. A busy server is different: in a real 20-file run, Common Crawl answered `503 Slow Down` so often that 11 of 20 files failed with the short waits. Busy waits are longer to give it room, and randomized so workers that were turned away together don't all return together. A `404` won't fix itself, so retrying wastes time. A file that's corrupt fails the same way every time, so after 3 tries it's marked failed instead of looping forever. The coordinator being down is temporary by definition (it's restarting), so workers wait for it.
 
 ## Time limits on every network call
 

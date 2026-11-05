@@ -86,7 +86,8 @@ Runs one worker until the coordinator says all work is done.
 | `-source` | `https://data.commoncrawl.org` | Common Crawl base URL |
 | `-out` | `data/results` | Where result files are written |
 | `-parsers` | number of CPU cores | Parser goroutines per file |
-| `-fetch-retries` | `3` | Download retries before failing a job |
+| `-fetch-retries` | `6` | Download retries before failing a job |
+| `-busy-backoff` | `15s` | First wait when Common Crawl says it's busy (`429`/`503`); doubles up to 2 minutes |
 | `-request-timeout` | `20s` | Time limit for each call to the coordinator |
 | `-first-byte-timeout` | `30s` | How long Common Crawl can take to start sending a file |
 | `-stall-timeout` | `20s` | Cancel a download when no data arrives for this long |

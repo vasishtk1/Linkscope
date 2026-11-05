@@ -33,7 +33,8 @@ A worker asks the coordinator for a job, downloads and processes that file with 
 | `Parsers` | Parser goroutines per file (see `extract.Run`) | 1 |
 | `PollInterval` | Wait between claims when no job is free | 2s |
 | `FetchRetries` | Download retries before failing the job | 0 |
-| `RetryBackoff` | First retry delay; doubles each time | 1s |
+| `RetryBackoff` | First retry delay for network errors and other `5xx`; doubles each time | 1s |
+| `BusyBackoff` | First wait after Common Crawl says it's busy (`429` or `503`); doubles up to 2 minutes, with jitter | 15s |
 | `RequestTimeout` | Time limit for each call to the coordinator | 20s |
 | `FirstByteTimeout` | How long Common Crawl can take to start sending a file | 30s |
 | `StallTimeout` | Cancel a download when no data arrives for this long | 20s |
@@ -81,6 +82,17 @@ Renews the lease every third of its length (every 20s for a 60s lease), so two h
 
 Runs `attempt` and starts over, with exponential backoff, if the download broke. Up to `FetchRetries` retries happen inside the job, without using up one of the coordinator's attempts. Only errors marked as `downloadError` are retried. A corrupt file or a `404` fails right away, since downloading it again gives the same result.
 
+There are two kinds of wait:
+
+| Failure | Waits | Why |
+|---|---|---|
+| Network error, timeout, stall, `500`, `502`, `504` | 1s, 2s, 4s, 8s… | Usually a blip that's gone in seconds |
+| Common Crawl says it's busy (`429`, `503`) | ~15s, ~30s, ~60s, then ~2 min each | The server is overloaded, so retrying quickly just adds to the pile |
+
+The busy waits are **jittered**: each one is a random amount between half and all of the planned wait. Without that, several workers turned away at the same moment would all come back at the same moment and get turned away again.
+
+**Why this was needed:** in a 20-file run with 4 workers, Common Crawl answered `503 Slow Down` so often that 11 of the 20 files failed. The old waits (1s, 2s, 4s) gave up after about 7 seconds in total. With the cluster's default of 6 retries, a busy file now keeps trying for roughly 4–8 minutes. Heartbeats keep running during the waits, so the job's lease doesn't expire.
+
 Starting over means downloading the whole file again. Resuming halfway isn't possible, because the extractor has already consumed the first half. At ~150 MB per file that costs a few seconds.
 
 ### `(*Worker) attempt(ctx, url, watPath) (jobs.Result, error)`
@@ -89,7 +101,11 @@ One try: download, then extract, then write the result, returning the counts. Th
 
 ### `downloadError`
 
-Wraps an error to mark it worth retrying: network errors, timeouts, stalls, `429 Too Many Requests` and `5xx`. Common Crawl does sometimes answer `503` under load. It has `Unwrap`, so `errors.As` can find it even after the extractor has wrapped it in its own message.
+Wraps an error to mark it worth retrying: network errors, timeouts, stalls, `429 Too Many Requests` and `5xx`. Its `busy` field is true for `429` and `503`, the codes a server uses to say "slow down", so `runJob` knows to use the longer waits. It has `Unwrap`, so `errors.As` can find it even after the extractor has wrapped it in its own message.
+
+### `jitter(d time.Duration) time.Duration`
+
+Returns a random wait between `d/2` and `d`. Used for busy waits so workers spread out their retries.
 
 ### `(*Worker) open(ctx, url) (io.ReadCloser, error)`
 
@@ -157,6 +173,8 @@ End-to-end tests with a real coordinator and job database, real workers, and a f
 |---|---|
 | `TestClusterProcessesEveryFileExactlyOnce` | 4 workers, 12 files: every job done, every file downloaded once, every result byte-identical to running the extractor directly, no leftover temp files |
 | `TestFlakyDownloadIsRetried` | Two `503`s, then success, and the job still completes |
+| `TestBusyServerGetsLongerWaits` | Two `503`s (and separately two `429`s) use the long, jittered busy waits, and the job still completes |
+| `TestOtherServerErrorsKeepShortWaits` | Two `500`s retry quickly, without the long busy wait |
 | `TestCorruptFileIsMarkedFailedAndOthersFinish` | A broken file fails after its attempts run out, and the rest finish |
 | `TestMissingFileFailsWithoutRetryingDownload` | `404` isn't retried |
 | `TestJobFromCrashedWorkerIsRedone` | A worker claims a job and disappears; after the lease expires another worker does it |
