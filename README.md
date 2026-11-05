@@ -66,6 +66,7 @@ Linkscope/
 ├── cmd/
 │   ├── coordinator/main.go    # queues files as jobs and serves the coordinator API
 │   ├── extract/main.go        # runs the extractor on one WAT file and prints a report
+│   ├── index/main.go          # builds the sharded backlink index from the graph and scores
 │   ├── merge/main.go          # combines all worker results into one link graph
 │   ├── pagerank/main.go       # scores every domain from the merged graph
 │   ├── validate/main.go       # compares our ranking with Common Crawl's
@@ -75,6 +76,7 @@ Linkscope/
 │   ├── coordinator/           # coordinator HTTP server, lease reaper, file list loading
 │   ├── extract/               # runs a WAT file through parallel parser goroutines
 │   ├── fixture/               # builds fake Common Crawl files for tests
+│   ├── index/                 # sharded backlink index: build, open, look up a site
 │   ├── jobs/                  # SQLite job list: claims, leases, retries, status
 │   ├── links/                 # URL → domain, which links count, domain link graph
 │   ├── merge/                 # combines worker result files into one link graph

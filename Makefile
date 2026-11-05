@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt up down clean sample sample-edges sample-scores web merge pagerank cc-ranks validate
+.PHONY: build test lint fmt up down clean sample sample-edges sample-scores sample-index web merge pagerank index cc-ranks validate
 
 build:
 	go build -o bin/ ./cmd/...
@@ -35,6 +35,10 @@ sample-edges: build
 sample-scores: sample-edges
 	./bin/pagerank -in data/sample.edges.tsv -o data/sample.scores.tsv -top 0
 
+sample-index: sample-scores
+	./bin/index -edges data/sample.edges.tsv -scores data/sample.scores.tsv -o data/sample-index \
+		-source "Sample: 1 Common Crawl file from $(CRAWL) (22,020 pages)"
+
 web: sample-scores
 	cd web && npm install && npm run dev
 
@@ -45,6 +49,9 @@ merge: build
 
 pagerank: build
 	./bin/pagerank -in data/merged.edges.tsv.gz -o data/scores.tsv
+
+index: build
+	./bin/index -edges data/merged.edges.tsv.gz -scores data/scores.tsv -o data/index
 
 CC_GRAPH ?= cc-main-2026-aug-sep-oct
 CC_TOP ?= 1000000

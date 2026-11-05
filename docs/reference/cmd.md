@@ -178,3 +178,33 @@ Turns `"1,5,20"` into `[1 5 20]`, rejecting anything that isn't a whole number o
 ### `run(scoresPath, ranksPath string, minLinks []int, top int) error`
 
 Reads both files, runs `validate.Compare`, and prints the agreement table and the side-by-side top list. If the ranks file is missing, the error says to run `make cc-ranks`.
+
+## cmd/index
+
+Builds the sharded backlink index from the merged link graph and the scores.
+
+```sh
+make index                                         # data/merged.edges.tsv.gz + data/scores.tsv → data/index/
+make sample-index                                  # the sample file → data/sample-index/, for the website
+./bin/index -shards 16 -source "20 files from CC-MAIN-2026-43"
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `-edges` | `data/merged.edges.tsv.gz` | Merged link graph from `cmd/merge` (plain `.tsv` works too) |
+| `-scores` | `data/scores.tsv` | Scores from `cmd/pagerank`; if the file is missing, the index is built without scores |
+| `-o` | `data/index` | Index folder (replaced if it exists) |
+| `-shards` | `8` | Number of shard files |
+| `-source` | none | Description of the data, shown on the website |
+
+### `main()`
+
+Parses flags, rejects extra arguments, and calls `run`.
+
+### `run(edgesPath, scoresPath, out string, shards int, source string) error`
+
+Loads the edges (reusing `merge.Files`, which handles gzip), reads the scores, calls `index.Build`, and prints the edge and domain counts, total shard size, and time.
+
+### `readScores(path string) (map[string]int, error)`
+
+Reads `scores.tsv` into a domain → score map. A missing file isn't an error, so an index can be built before PageRank has run; every score then shows as "—".

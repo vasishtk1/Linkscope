@@ -143,3 +143,23 @@ Each entry: what was decided, the alternatives, and why.
 - **Alternatives:** compare raw values; check only that well-known sites are near the top; compare with a commercial authority score.
 - **Why:** the raw values can't be compared, since our graph is a small slice and theirs is three full crawls, so only the order is meaningful. Spot-checking famous sites is convincing to a person but proves little. Commercial scores use secret methods and aren't free. Common Crawl's ranks come from the same source data with a published method. Splitting by linking sites shows whether disagreement comes from thin data (it should shrink with more evidence) or from a scoring bug (it wouldn't).
 - **Trade-off:** we download only their top 1,000,000 domains. That's enough to cover every domain we can say anything useful about, and it avoids a 2.4 GB download.
+
+## Shard the index by a hash of the domain
+
+- **Decision:** the index is split into N shard files (8 by default), and a domain's shard is its FNV-1a hash modulo N.
+- **Alternatives:** one big file; splitting by first letter or alphabetical ranges.
+- **Why:** one file would work at today's size but not at stage 7's, and it can't be spread across machines. Splitting by letter is uneven: far more domains start with `s` than `x`. Hash values look random, so domains spread evenly. On the 20-file data, the 8 shards each hold between 73,127 and 73,763 domains. A lookup recomputes the hash and opens only the shard it names.
+- **Trade-off:** changing the shard count moves almost every domain to a different shard, so the whole index has to be rebuilt. That's fine because the index is always rebuilt from scratch after a run.
+- **Page-level lookups later:** sharding by domain means every page on a site will land in the same shard as the site, so a page index can be added inside each shard without changing this design.
+
+## Directory in memory, backlinks on disk
+
+- **Decision:** each shard ends with a sorted directory (domain → score, totals, and where its backlinks start). The API loads only the directories into memory and reads a domain's backlinks from disk with one `ReadAt` per lookup.
+- **Alternatives:** load everything into memory, as the website used to; use a database like SQLite or an embedded key-value store.
+- **Why:** the directory is one short line per domain, while backlink lists are most of the data (200.7 MB of shards on the 20-file run). Keeping only the directory in memory lets the index grow far past the server's RAM. The operating system caches recently read parts of the files, so popular sites are served from memory anyway. A hand-built format with one binary search and one read is also easy to explain and to measure. A database would add features we don't use (updates, queries) to a file that's written once and only read.
+
+## Plain-text records inside the index
+
+- **Decision:** backlink lists and directory lines are tab-separated text. Only the 16-byte footer is binary.
+- **Alternatives:** a compact binary encoding (varints, string tables), or compressing each list.
+- **Why:** text can be checked with `head` and `grep`, and it matches every other file in the pipeline. Parsing a few hundred lines per lookup is cheap next to the network round trip. If the stage 7 index gets too big, compressing each backlink list separately is the next step; that keeps one read per lookup.

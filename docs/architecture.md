@@ -125,6 +125,24 @@ The merge follows the same order-independent rules as extraction, so the merged 
 
 `cmd/validate` then checks the ranking against Common Crawl's own published PageRank. On one file, rank agreement (Spearman) is 0.47 across all domains with a backlink and 0.76 for domains with 100+ linking sites, and our top 20 are all in Common Crawl's top 179. Details in [reference/validate.md](reference/validate.md).
 
+## Stage 5: index and API
+
+`cmd/index` turns the merged graph and the scores into a sharded index: 8 files, with each domain in the file its name hashes to. Inside each file, a sorted directory says where every domain's backlinks are stored. A lookup hashes the name to pick the file, binary-searches the directory, and reads that one list from disk. Details in [reference/index.md](reference/index.md).
+
+### Measured
+
+| | 1 file (sample) | 20 files |
+|---|---|---|
+| Edges | 130,138 | 1,199,002 |
+| Domains | 77,793 | 588,294 |
+| Domains with backlinks | 62,052 | 462,254 |
+| Index size (8 shards) | 22.8 MB | 200.7 MB |
+| Build time | 0.27s | 3.59s |
+| Build peak memory | ~128 MB | ~904 MB |
+| Domains per shard | 9,627 – 9,952 | 73,127 – 73,763 |
+
+Every domain with backlinks was looked up in the index and compared row by row with the edge file, and all of them matched.
+
 ## Fault tolerance tests (stage 3)
 
 Stage 2 covers each failure above with an automated test (see the table in [reference/worker.md](reference/worker.md)). Stage 3 goes further: randomly killing workers during real runs and proving the final output matches a clean run byte for byte.

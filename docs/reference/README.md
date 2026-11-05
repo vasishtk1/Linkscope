@@ -14,9 +14,10 @@ Every package and function, documented here instead of in code comments. Each en
 | [internal/merge](merge.md) | Combines every worker's result file into one link graph |
 | [internal/pagerank](pagerank.md) | Scores every domain from the merged graph with PageRank |
 | [internal/validate](validate.md) | Compares our ranking with Common Crawl's published one |
+| [internal/index](index.md) | Sharded backlink index: build once, look up any site with one disk read |
 | [internal/fixture](#internalfixture) | Builds fake Common Crawl files for tests |
 | [web/](web.md) | The website: pages, API routes, animated graph |
-| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge`, `pagerank`, `validate` |
+| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge`, `pagerank`, `validate`, `index` |
 
 ## How the packages connect
 
@@ -44,6 +45,13 @@ results/*.edges.tsv.gz → merge.ResultFiles() → merge.Files() → links.ReadT
                                                                                                     merged.edges.tsv.gz
 merged.edges.tsv.gz → pagerank.Compute() → pagerank.Scores() → pagerank.WriteTSV() → scores.tsv
 scores.tsv + cc-domain-ranks.tsv → pagerank.ReadTSV() + validate.ReadRanks() → validate.Compare() → agreement report
+```
+
+**Serving lookups (stage 5):**
+
+```
+merged.edges.tsv.gz + scores.tsv → index.Build() → data/index/ (manifest.json + shard-000.idx … shard-007.idx)
+"github.com" → index.Normalize() → Resolve() → Find(): ShardOf() picks the shard, binary search its directory → Backlinks(): one ReadAt
 ```
 
 ## internal/fixture

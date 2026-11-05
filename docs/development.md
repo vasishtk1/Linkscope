@@ -18,9 +18,11 @@
 | `make clean` | Deletes `bin/` |
 | `make sample-edges` | Extracts `data/sample.warc.wat.gz` into `data/sample.edges.tsv` for the website |
 | `make sample-scores` | Runs PageRank on the sample edges into `data/sample.scores.tsv` for the website |
+| `make sample-index` | Builds the sample index into `data/sample-index/` from the sample edges and scores |
 | `make web` | Builds both sample files, installs the website's packages, and runs it on localhost:3000 |
 | `make merge` | Merges every result file in `RESULTS` (default `data/results`) into `data/merged.edges.tsv.gz` (`RESULTS=data/cluster/results make merge` for the Docker cluster) |
 | `make pagerank` | Scores every domain in `data/merged.edges.tsv.gz` and writes `data/scores.tsv` |
+| `make index` | Builds the sharded backlink index in `data/index/` from `data/merged.edges.tsv.gz` and `data/scores.tsv` |
 | `make cc-ranks` | Saves Common Crawl's top 1,000,000 domains (`CC_TOP`) from their web graph (`CC_GRAPH`, default `cc-main-2026-aug-sep-oct`) to `data/cc-domain-ranks.tsv` |
 | `make validate` | Compares `data/scores.tsv` with `data/cc-domain-ranks.tsv` and prints how closely they agree |
 | `make sample` | Downloads the first WAT file of the crawl in `CRAWL` (default `CC-MAIN-2026-43`) to `data/sample.warc.wat.gz` |
