@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt up down clean sample sample-edges web merge pagerank
+.PHONY: build test lint fmt up down clean sample sample-edges web merge pagerank cc-ranks validate
 
 build:
 	go build -o bin/ ./cmd/...
@@ -42,3 +42,15 @@ merge: build
 
 pagerank: build
 	./bin/pagerank -in data/merged.edges.tsv.gz -o data/scores.tsv
+
+CC_GRAPH ?= cc-main-2026-aug-sep-oct
+CC_TOP ?= 1000000
+
+cc-ranks:
+	mkdir -p data
+	curl -fsS --retry 8 --retry-delay 15 --retry-all-errors \
+		https://data.commoncrawl.org/projects/hyperlinkgraph/$(CC_GRAPH)/domain/$(CC_GRAPH)-domain-ranks.txt.gz \
+		| gunzip | head -n $$(( $(CC_TOP) + 1 )) > data/cc-domain-ranks.tsv
+
+validate: build
+	./bin/validate -scores data/scores.tsv -ranks data/cc-domain-ranks.tsv

@@ -136,3 +136,10 @@ Each entry: what was decided, the alternatives, and why.
 - **Decision:** the website shows a 0–100 score from the log of the raw PageRank, scaled between the lowest and highest rank in the data.
 - **Alternatives:** show raw PageRank; percentile rank.
 - **Why:** raw values like `7.61e-04` mean nothing to a reader, and they're so lopsided that a straight 0–100 scale would put almost every site at 0. A percentile would hide how far apart sites are. The trade-off is that scores are relative to the data processed, so they shift as more files are added.
+
+## Validate with rank correlation against Common Crawl
+
+- **Decision:** compare our PageRank with Common Crawl's published domain PageRank using Spearman rank correlation, reported separately for domains with at least 1, 5, 20 and 100 linking sites.
+- **Alternatives:** compare raw values; check only that well-known sites are near the top; compare with a commercial authority score.
+- **Why:** the raw values can't be compared, since our graph is a small slice and theirs is three full crawls, so only the order is meaningful. Spot-checking famous sites is convincing to a person but proves little. Commercial scores use secret methods and aren't free. Common Crawl's ranks come from the same source data with a published method. Splitting by linking sites shows whether disagreement comes from thin data (it should shrink with more evidence) or from a scoring bug (it wouldn't).
+- **Trade-off:** we download only their top 1,000,000 domains. That's enough to cover every domain we can say anything useful about, and it avoids a 2.4 GB download.

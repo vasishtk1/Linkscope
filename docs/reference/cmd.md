@@ -148,3 +148,32 @@ Loads the merged graph (reusing `merge.Files` on the single input file), runs `p
 ### `writeScores(path string, scores []pagerank.Score) error`
 
 Writes the scores to a temp file and renames it into place, so the website never reads a half-written file.
+
+## cmd/validate
+
+Compares our scores with Common Crawl's published domain ranking and prints how closely they agree.
+
+```sh
+make cc-ranks       # once: save Common Crawl's top 1,000,000 domains to data/cc-domain-ranks.tsv
+make validate       # compare data/scores.tsv against it
+./bin/validate -min-links 1,10,50 -top 50
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `-scores` | `data/scores.tsv` | Our scores from `cmd/pagerank` |
+| `-ranks` | `data/cc-domain-ranks.tsv` | Common Crawl's ranks (`make cc-ranks`) |
+| `-min-links` | `1,5,20,100` | Report agreement for domains with at least this many linking sites |
+| `-top` | `20` | Show this many of our top domains next to Common Crawl's positions |
+
+### `main()`
+
+Parses flags, including the comma-separated levels, and calls `run`.
+
+### `parseLevels(s string) ([]int, error)`
+
+Turns `"1,5,20"` into `[1 5 20]`, rejecting anything that isn't a whole number of 0 or more.
+
+### `run(scoresPath, ranksPath string, minLinks []int, top int) error`
+
+Reads both files, runs `validate.Compare`, and prints the agreement table and the side-by-side top list. If the ranks file is missing, the error says to run `make cc-ranks`.

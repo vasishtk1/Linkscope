@@ -151,3 +151,35 @@ func TestWriteTSV(t *testing.T) {
 		t.Fatalf("got %q", buf.String())
 	}
 }
+
+func TestReadTSVRoundTrip(t *testing.T) {
+	want := Scores(Compute([]links.Edge{edge("a.com", "b.com"), edge("c.com", "b.com"), edge("b.com", "a.com")}, DefaultOptions()))
+	var buf bytes.Buffer
+	if err := WriteTSV(&buf, want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadTSV(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range want {
+		if got[i].Domain != want[i].Domain || got[i].Score != want[i].Score || got[i].LinkingDomains != want[i].LinkingDomains ||
+			math.Abs(got[i].Rank-want[i].Rank) > want[i].Rank*1e-6 {
+			t.Fatalf("row %d: got %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+func TestReadTSVRejectsBadInput(t *testing.T) {
+	header := "domain\tscore\tpagerank\tlinking_domains\n"
+	for name, in := range map[string]string{
+		"empty":        "",
+		"wrong header": "a\tb\n",
+		"few fields":   header + "a.com\t1\n",
+		"bad number":   header + "a.com\tx\t0.1\t3\n",
+	} {
+		if _, err := ReadTSV(bytes.NewBufferString(in)); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+}

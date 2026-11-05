@@ -77,3 +77,7 @@ The highest-ranked site gets 100. Sites nothing votes for share the lowest rank 
 ### `WriteTSV(w io.Writer, scores []Score) error`
 
 Writes `domain`, `score`, `pagerank` (scientific notation), and `linking_domains` as TSV with a header row.
+
+### `ReadTSV(r io.Reader) ([]Score, error)`
+
+Reads a file written by `WriteTSV`, in file order (highest first). Checks the header and fails with the line number on a bad row. Used by `cmd/validate`, and the same format is read by the website.

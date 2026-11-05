@@ -2,10 +2,13 @@ package pagerank
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/vasishtk1/Linkscope/internal/links"
 )
@@ -137,11 +140,43 @@ func Scores(r Result) []Score {
 	return out
 }
 
+const tsvHeader = "domain\tscore\tpagerank\tlinking_domains"
+
 func WriteTSV(w io.Writer, scores []Score) error {
 	bw := bufio.NewWriter(w)
-	fmt.Fprintln(bw, "domain\tscore\tpagerank\tlinking_domains")
+	fmt.Fprintln(bw, tsvHeader)
 	for _, s := range scores {
 		fmt.Fprintf(bw, "%s\t%d\t%.6e\t%d\n", s.Domain, s.Score, s.Rank, s.LinkingDomains)
 	}
 	return bw.Flush()
+}
+
+// ReadTSV reads a file written by WriteTSV.
+func ReadTSV(r io.Reader) ([]Score, error) {
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 64*1024), 1024*1024)
+	if !sc.Scan() {
+		if err := sc.Err(); err != nil {
+			return nil, err
+		}
+		return nil, errors.New("empty file: missing header")
+	}
+	if sc.Text() != tsvHeader {
+		return nil, fmt.Errorf("line 1: unexpected header %q", sc.Text())
+	}
+	var out []Score
+	for n := 2; sc.Scan(); n++ {
+		f := strings.Split(sc.Text(), "\t")
+		if len(f) != 4 {
+			return nil, fmt.Errorf("line %d: want 4 fields, got %d", n, len(f))
+		}
+		score, err1 := strconv.Atoi(f[1])
+		rank, err2 := strconv.ParseFloat(f[2], 64)
+		linking, err3 := strconv.Atoi(f[3])
+		if err := errors.Join(err1, err2, err3); err != nil {
+			return nil, fmt.Errorf("line %d: %w", n, err)
+		}
+		out = append(out, Score{Domain: f[0], Score: score, Rank: rank, LinkingDomains: linking})
+	}
+	return out, sc.Err()
 }

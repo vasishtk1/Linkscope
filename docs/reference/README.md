@@ -13,9 +13,10 @@ Every package and function, documented here instead of in code comments. Each en
 | [internal/worker](worker.md) | The worker loop: claim, download, extract, save, report, heartbeat |
 | [internal/merge](merge.md) | Combines every worker's result file into one link graph |
 | [internal/pagerank](pagerank.md) | Scores every domain from the merged graph with PageRank |
+| [internal/validate](validate.md) | Compares our ranking with Common Crawl's published one |
 | [internal/fixture](#internalfixture) | Builds fake Common Crawl files for tests |
 | [web/](web.md) | The website: pages, API routes, animated graph |
-| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge`, `pagerank` |
+| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge`, `pagerank`, `validate` |
 
 ## How the packages connect
 
@@ -42,6 +43,7 @@ cmd/worker ── worker.Worker ── fetch from Common Crawl ── extract.Ru
 results/*.edges.tsv.gz → merge.ResultFiles() → merge.Files() → links.ReadTSV() → Graph.AddEdge() → merge.WriteFile()
                                                                                                     merged.edges.tsv.gz
 merged.edges.tsv.gz → pagerank.Compute() → pagerank.Scores() → pagerank.WriteTSV() → scores.tsv
+scores.tsv + cc-domain-ranks.tsv → pagerank.ReadTSV() + validate.ReadRanks() → validate.Compare() → agreement report
 ```
 
 ## internal/fixture

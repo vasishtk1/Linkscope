@@ -123,6 +123,8 @@ The merge follows the same order-independent rules as extraction, so the merged 
 | PageRank | 21 rounds, 0.06s |
 | Top 5 | facebook.com, instagram.com, google.com, twitter.com, youtube.com |
 
+`cmd/validate` then checks the ranking against Common Crawl's own published PageRank. On one file, rank agreement (Spearman) is 0.47 across all domains with a backlink and 0.76 for domains with 100+ linking sites, and our top 20 are all in Common Crawl's top 179. Details in [reference/validate.md](reference/validate.md).
+
 ## Fault tolerance tests (stage 3)
 
 Stage 2 covers each failure above with an automated test (see the table in [reference/worker.md](reference/worker.md)). Stage 3 goes further: randomly killing workers during real runs and proving the final output matches a clean run byte for byte.
