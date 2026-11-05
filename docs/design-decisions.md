@@ -163,3 +163,9 @@ Each entry: what was decided, the alternatives, and why.
 - **Decision:** backlink lists and directory lines are tab-separated text. Only the 16-byte footer is binary.
 - **Alternatives:** a compact binary encoding (varints, string tables), or compressing each list.
 - **Why:** text can be checked with `head` and `grep`, and it matches every other file in the pipeline. Parsing a few hundred lines per lookup is cheap next to the network round trip. If the stage 7 index gets too big, compressing each backlink list separately is the next step; that keeps one read per lookup.
+
+## Lookups in a separate Go API
+
+- **Decision:** `cmd/api` serves lookups over HTTP, and the website calls it.
+- **Alternatives:** keep reading data files inside the Next.js website, as stage 6 first did.
+- **Why:** the index format and lookup code are in Go, so a second copy in TypeScript would be two implementations to keep in sync. A separate API can be load-tested on its own, scaled separately, and later split so each machine serves some of the shards. The website goes back to only drawing pages.

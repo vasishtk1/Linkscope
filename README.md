@@ -64,6 +64,7 @@ Both runs produce byte-identical results. At 4 workers the download (~29 MB/s) i
 Linkscope/
 ├── .github/workflows/ci.yml   # lint, test, build on every push and PR
 ├── cmd/
+│   ├── api/main.go            # serves backlink lookups from the index over HTTP
 │   ├── coordinator/main.go    # queues files as jobs and serves the coordinator API
 │   ├── extract/main.go        # runs the extractor on one WAT file and prints a report
 │   ├── index/main.go          # builds the sharded backlink index from the graph and scores
@@ -81,6 +82,7 @@ Linkscope/
 │   ├── links/                 # URL → domain, which links count, domain link graph
 │   ├── merge/                 # combines worker result files into one link graph
 │   ├── pagerank/              # PageRank over the domain graph, 0–100 scores
+│   ├── serve/                 # lookup API routes: /lookup, /known, /stats
 │   ├── validate/              # rank agreement with Common Crawl's published ranks
 │   ├── warc/                  # reads records out of WARC/WAT files
 │   ├── wat/                   # parses WAT JSON into pages and links

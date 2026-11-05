@@ -15,9 +15,10 @@ Every package and function, documented here instead of in code comments. Each en
 | [internal/pagerank](pagerank.md) | Scores every domain from the merged graph with PageRank |
 | [internal/validate](validate.md) | Compares our ranking with Common Crawl's published one |
 | [internal/index](index.md) | Sharded backlink index: build once, look up any site with one disk read |
+| [internal/serve](serve.md) | The lookup API's HTTP routes |
 | [internal/fixture](#internalfixture) | Builds fake Common Crawl files for tests |
 | [web/](web.md) | The website: pages, API routes, animated graph |
-| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge`, `pagerank`, `validate`, `index` |
+| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge`, `pagerank`, `validate`, `index`, `api` |
 
 ## How the packages connect
 
@@ -51,6 +52,7 @@ scores.tsv + cc-domain-ranks.tsv → pagerank.ReadTSV() + validate.ReadRanks() �
 
 ```
 merged.edges.tsv.gz + scores.tsv → index.Build() → data/index/ (manifest.json + shard-000.idx … shard-007.idx)
+website → GET /lookup (cmd/api, serve.Handler) → index.Lookup():
 "github.com" → index.Normalize() → Resolve() → Find(): ShardOf() picks the shard, binary search its directory → Backlinks(): one ReadAt
 ```
 

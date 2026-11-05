@@ -208,3 +208,26 @@ Loads the edges (reusing `merge.Files`, which handles gzip), reads the scores, c
 ### `readScores(path string) (map[string]int, error)`
 
 Reads `scores.tsv` into a domain → score map. A missing file isn't an error, so an index can be built before PageRank has run; every score then shows as "—".
+
+## cmd/api
+
+Opens the index and serves lookups over HTTP. Routes are in [serve.md](serve.md).
+
+```sh
+make api                                    # serve data/index on :8081
+INDEX=data/sample-index make api            # serve the sample index
+curl -s "localhost:8081/lookup?domain=github.com&limit=5"
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `-addr` | `:8081` | Listen address |
+| `-index` | `data/index` | Index folder from `cmd/index` |
+
+### `main()`
+
+Parses flags and calls `run`.
+
+### `run(addr, dir string) error`
+
+Opens the index, logs how many domains, edges and shards it loaded and how long that took, and serves `serve.Handler`. Like the coordinator, it has time limits on reading requests and writing responses, and shuts down cleanly on Ctrl+C or `SIGTERM`.

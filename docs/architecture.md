@@ -129,6 +129,8 @@ The merge follows the same order-independent rules as extraction, so the merged 
 
 `cmd/index` turns the merged graph and the scores into a sharded index: 8 files, with each domain in the file its name hashes to. Inside each file, a sorted directory says where every domain's backlinks are stored. A lookup hashes the name to pick the file, binary-searches the directory, and reads that one list from disk. Details in [reference/index.md](reference/index.md).
 
+`cmd/api` opens the index and answers `GET /lookup?domain=…` over HTTP. Only the directories are loaded into memory; backlink lists are read from disk per lookup. Routes in [reference/serve.md](reference/serve.md).
+
 ### Measured
 
 | | 1 file (sample) | 20 files |
@@ -140,6 +142,8 @@ The merge follows the same order-independent rules as extraction, so the merged 
 | Build time | 0.27s | 3.59s |
 | Build peak memory | ~128 MB | ~904 MB |
 | Domains per shard | 9,627 – 9,952 | 73,127 – 73,763 |
+| API startup (open index) | 31 ms | 148 ms |
+| API memory after startup | ~25 MB | ~192 MB |
 
 Every domain with backlinks was looked up in the index and compared row by row with the edge file, and all of them matched.
 
