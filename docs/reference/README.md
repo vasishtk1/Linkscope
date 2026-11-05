@@ -16,9 +16,10 @@ Every package and function, documented here instead of in code comments. Each en
 | [internal/validate](validate.md) | Compares our ranking with Common Crawl's published one |
 | [internal/index](index.md) | Sharded backlink index: build once, look up any site with one disk read |
 | [internal/serve](serve.md) | The lookup API's HTTP routes |
+| [internal/loadtest](loadtest.md) | Measures lookup throughput and latency against the API |
 | [internal/fixture](#internalfixture) | Builds fake Common Crawl files for tests |
 | [web/](web.md) | The website: pages, API routes, animated graph |
-| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge`, `pagerank`, `validate`, `index`, `api` |
+| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge`, `pagerank`, `validate`, `index`, `api`, `loadtest` |
 
 ## How the packages connect
 

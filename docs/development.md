@@ -24,6 +24,7 @@
 | `make pagerank` | Scores every domain in `data/merged.edges.tsv.gz` and writes `data/scores.tsv` |
 | `make index` | Builds the sharded backlink index in `data/index/` from `data/merged.edges.tsv.gz` and `data/scores.tsv` |
 | `make api` | Serves lookups from `INDEX` (default `data/index`) on localhost:8081 |
+| `make loadtest` | Measures lookup speed against a running API (8 at once for 10s; uses most of the CPU while it runs) |
 | `make cc-ranks` | Saves Common Crawl's top 1,000,000 domains (`CC_TOP`) from their web graph (`CC_GRAPH`, default `cc-main-2026-aug-sep-oct`) to `data/cc-domain-ranks.tsv` |
 | `make validate` | Compares `data/scores.tsv` with `data/cc-domain-ranks.tsv` and prints how closely they agree |
 | `make sample` | Downloads the first WAT file of the crawl in `CRAWL` (default `CC-MAIN-2026-43`) to `data/sample.warc.wat.gz` |

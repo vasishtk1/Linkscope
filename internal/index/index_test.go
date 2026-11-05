@@ -84,6 +84,17 @@ func TestSubdomainFallsBackToItsSite(t *testing.T) {
 	}
 }
 
+// Some registered domains really start with www., because the part after it is a public suffix.
+func TestDomainThatStartsWithWWW(t *testing.T) {
+	_, ix := build(t, append([]links.Edge{edge("github.com", "www.gov.uk", 2, 0)}, testEdges...), 4)
+	for in, want := range map[string]string{"www.gov.uk": "www.gov.uk", "https://www.gov.uk/x": "www.gov.uk", "www.github.com": "github.com"} {
+		got, err := ix.Lookup(in, 0)
+		if err != nil || got == nil || got.Domain != want {
+			t.Errorf("%s: got %+v, %v, want %s", in, got, err, want)
+		}
+	}
+}
+
 func TestDomainsWithoutBacklinks(t *testing.T) {
 	_, ix := build(t, testEdges, 4)
 	if got, err := ix.Lookup("reddit.com", 0); got != nil || err != nil {
@@ -170,7 +181,7 @@ func TestBuildRejectsZeroShards(t *testing.T) {
 func TestNormalize(t *testing.T) {
 	for in, want := range map[string]string{
 		"github.com":                        "github.com",
-		"  HTTPS://www.GitHub.com/a?b#c ":   "github.com",
+		"  HTTPS://www.GitHub.com/a?b#c ":   "www.github.com",
 		"user@example.com:8080/path":        "example.com",
 		"example.com.":                      "example.com",
 		"http://docs.python.org/3/library/": "docs.python.org",

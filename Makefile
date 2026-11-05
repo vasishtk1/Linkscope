@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt up down clean sample sample-edges sample-scores sample-index web merge pagerank index api cc-ranks validate
+.PHONY: build test lint fmt up down clean sample sample-edges sample-scores sample-index web merge pagerank index api loadtest cc-ranks validate
 
 build:
 	go build -o bin/ ./cmd/...
@@ -58,6 +58,9 @@ INDEX ?= data/index
 
 api: build
 	./bin/api -index $(INDEX)
+
+loadtest: build
+	./bin/loadtest -scores data/scores.tsv
 
 CC_GRAPH ?= cc-main-2026-aug-sep-oct
 CC_TOP ?= 1000000

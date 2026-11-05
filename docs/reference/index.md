@@ -117,11 +117,13 @@ The answer to one search: `Domain`, `Score` (`null` in JSON when unknown), `Link
 
 ### `Normalize(input string) string`
 
-Turns what a user types into a bare host: lowercase, trim, drop the scheme, path, query, `user@`, port, trailing dot, and leading `www.`. `" HTTPS://www.GitHub.com/a?b "` becomes `github.com`.
+Turns what a user types into a bare host: lowercase, trim, drop the scheme, path, query, `user@`, port and trailing dot. `" HTTPS://www.GitHub.com/a?b "` becomes `www.github.com`.
+
+**It keeps `www.`** and leaves it to `Resolve`. Some registered domains really start with `www.` because the rest is a public suffix: `www.gov.uk`, `www.nhs.uk`, `www.gov.br`. Stripping `www.` turned those into `gov.uk`, which isn't a site. The load test found this: 95 of the 412,419 domains with backlinks on the 20-file run couldn't be looked up. The old website had the same bug.
 
 ### `(*Index) Resolve(host string) (Entry, bool)`
 
-Tries the host, then drops subdomains one at a time until it finds a domain that has backlinks. `docs.github.com` falls back to `github.com`. It stops before the last label, so it never tries a bare `com`.
+Tries the host, then drops subdomains one at a time until it finds a domain that has backlinks. `docs.github.com` and `www.github.com` fall back to `github.com`, while `www.gov.uk` matches as it is. It stops before the last label, so it never tries a bare `com`.
 
 ### `(*Index) Lookup(input string, limit int) (*Lookup, error)`
 
@@ -134,6 +136,7 @@ Tries the host, then drops subdomains one at a time until it finds a domain that
 | `TestLookupMatchesInput` | Full lookup result with 1, 4 and 16 shards, from a messy URL |
 | `TestLimitReturnsTopBacklinks` | `limit` returns the top N; totals still count all |
 | `TestSubdomainFallsBackToItsSite` | `docs.github.com` → `github.com` |
+| `TestDomainThatStartsWithWWW` | `www.gov.uk` is found as itself; `www.github.com` still finds `github.com` |
 | `TestDomainsWithoutBacklinks` | Link-only domains aren't search results but are still in the directory with their score |
 | `TestMissingScoreIsNull` | No score → `null` |
 | `TestEveryDomainIsInTheShardItsHashPicks` | Every domain is in the shard `ShardOf` names, and none are lost |
@@ -141,6 +144,6 @@ Tries the host, then drops subdomains one at a time until it finds a domain that
 | `TestRebuildReplacesOldIndex` | Rebuilding with fewer shards leaves no old shards or temp folders |
 | `TestOpenRejectsDamagedShard` | A cut-off shard fails to open |
 | `TestBuildRejectsZeroShards` | Bad option is an error |
-| `TestNormalize` | Scheme, `www.`, case, path, port, `user@`, trailing dot |
+| `TestNormalize` | Scheme, case, path, port, `user@`, trailing dot; `www.` kept |
 
 The index was also checked against the raw edges on real data. Every domain with backlinks was looked up and compared row by row with the edge file: all 62,052 on the 1-file sample and all 462,254 on the 20-file run matched.

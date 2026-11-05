@@ -231,3 +231,36 @@ Parses flags and calls `run`.
 ### `run(addr, dir string) error`
 
 Opens the index, logs how many domains, edges and shards it loaded and how long that took, and serves `serve.Handler`. Like the coordinator, it has time limits on reading requests and writing responses, and shuts down cleanly on Ctrl+C or `SIGTERM`.
+
+## cmd/loadtest
+
+Measures lookup speed against a running `cmd/api`. **It uses most of the CPU while it runs**, so keep runs short on a laptop.
+
+```sh
+make api &                                          # serve data/index on :8081
+make loadtest                                       # 8 at once for 10s, domains from data/scores.tsv
+./bin/loadtest -c 32 -d 10s                         # more at once
+./bin/loadtest -top 100                             # only the 100 most-linked sites (big answers)
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `-url` | `http://localhost:8081` | API address |
+| `-scores` | `data/scores.tsv` | Where to get domain names; must come from the same run as the API's index |
+| `-top` | `0` | Only the N highest-ranked domains (0 = every domain with backlinks) |
+| `-c` | `8` | Lookups in flight at once |
+| `-d` | `10s` | How long to measure |
+| `-warmup` | `2s` | Unmeasured run first, so the shard files are in the OS cache |
+| `-limit` | `1000` | Backlinks per answer, like the website (0 = all) |
+
+### `main()`
+
+Parses flags and calls `run`.
+
+### `run(o loadtest.Options, scoresPath string, top int, warmup time.Duration) error`
+
+Picks domains, sets up an HTTP client that keeps one connection per goroutine open, runs the warm-up, then the measured run, and prints requests, errors, lookups per second, p50/p90/p99/max, and average answer size. It exits with an error if any lookup failed.
+
+### `pickDomains(path string, top int) ([]string, error)`
+
+Reads the scores file and keeps domains with at least one linking site, so every lookup should return `200`. Any error then points at a real problem.

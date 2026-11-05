@@ -16,7 +16,7 @@ async function call(path: string): Promise<Response> {
   }
 }
 
-// lookup asks the Go API; undefined means nothing links to the site.
+// lookup asks the Go API, which cleans up the input; undefined means nothing links to the site.
 export async function lookup(input: string, limit = PAGE_LIMIT): Promise<Lookup | undefined> {
   const res = await call(`/lookup?domain=${encodeURIComponent(input)}&limit=${limit}`);
   if (res.status === 404) return undefined;

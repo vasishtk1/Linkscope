@@ -17,7 +17,7 @@ type Lookup struct {
 
 var scheme = regexp.MustCompile(`^[a-z][a-z0-9+.-]*://`)
 
-// Normalize turns whatever the user typed ("https://www.Example.com/page") into a bare host.
+// Normalize turns whatever the user typed ("https://www.Example.com/page") into a bare host; Resolve drops the www.
 func Normalize(input string) string {
 	s := strings.ToLower(strings.TrimSpace(input))
 	s = scheme.ReplaceAllString(s, "")
@@ -30,8 +30,7 @@ func Normalize(input string) string {
 	if i := strings.Index(s, ":"); i >= 0 {
 		s = s[:i]
 	}
-	s = strings.TrimSuffix(s, ".")
-	return strings.TrimPrefix(s, "www.")
+	return strings.TrimSuffix(s, ".")
 }
 
 // Resolve finds the indexed domain with backlinks for a host, dropping subdomains until one matches.

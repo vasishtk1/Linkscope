@@ -147,6 +147,16 @@ The website's routes now call this API instead of reading data files. Pages get 
 | API startup (open index) | 31 ms | 148 ms |
 | API memory after startup | ~25 MB | ~192 MB |
 
+### Load test (20 files, Apple M1 laptop, middle of 3 runs)
+
+`cmd/loadtest` looked up random domains from the 412,419 with backlinks, with `limit=1000` like the website. Details in [reference/loadtest.md](reference/loadtest.md).
+
+| Lookups at once | Lookups/s | p50 | p99 | Errors |
+|---|---|---|---|---|
+| 1 | 11,025 | 0.08 ms | 0.24 ms | 0 |
+| 8 | 28,829 | 0.21 ms | 1.13 ms | 0 |
+| 32 | 38,511 | 0.78 ms | 2.26 ms | 0 |
+
 Every domain with backlinks was looked up in the index and compared row by row with the edge file, and all of them matched.
 
 ## Fault tolerance tests (stage 3)

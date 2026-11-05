@@ -4,7 +4,7 @@ Distributed backlink index and domain authority engine built on Common Crawl dat
 
 Type in a domain and see who links to it, an authority score, and an interactive graph of its connections. Linkscope processes Common Crawl's public web archive across a pool of workers, extracts every link between websites, and scores domains with PageRank.
 
-> **Status:** stages 0–2 and 4 of 7 done (distributed workers with crash and freeze recovery, merge, PageRank checked against Common Crawl's ranks); the website is in progress. See [docs/roadmap.md](docs/roadmap.md).
+> **Status:** stages 0–2, 4 and 5 of 7 done (distributed workers with crash and freeze recovery, merge, PageRank checked against Common Crawl's ranks, sharded index and lookup API); the website is in progress. See [docs/roadmap.md](docs/roadmap.md).
 
 ## How it works
 
@@ -68,6 +68,7 @@ Linkscope/
 │   ├── coordinator/main.go    # queues files as jobs and serves the coordinator API
 │   ├── extract/main.go        # runs the extractor on one WAT file and prints a report
 │   ├── index/main.go          # builds the sharded backlink index from the graph and scores
+│   ├── loadtest/main.go       # measures API lookup speed under load
 │   ├── merge/main.go          # combines all worker results into one link graph
 │   ├── pagerank/main.go       # scores every domain from the merged graph
 │   ├── validate/main.go       # compares our ranking with Common Crawl's
@@ -80,6 +81,7 @@ Linkscope/
 │   ├── index/                 # sharded backlink index: build, open, look up a site
 │   ├── jobs/                  # SQLite job list: claims, leases, retries, status
 │   ├── links/                 # URL → domain, which links count, domain link graph
+│   ├── loadtest/              # runs many lookups at once and records latencies
 │   ├── merge/                 # combines worker result files into one link graph
 │   ├── pagerank/              # PageRank over the domain graph, 0–100 scores
 │   ├── serve/                 # lookup API routes: /lookup, /known, /stats
