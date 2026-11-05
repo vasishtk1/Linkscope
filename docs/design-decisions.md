@@ -169,3 +169,4 @@ Each entry: what was decided, the alternatives, and why.
 - **Decision:** `cmd/api` serves lookups over HTTP, and the website calls it.
 - **Alternatives:** keep reading data files inside the Next.js website, as stage 6 first did.
 - **Why:** the index format and lookup code are in Go, so a second copy in TypeScript would be two implementations to keep in sync. A separate API can be load-tested on its own, scaled separately, and later split so each machine serves some of the shards. The website goes back to only drawing pages.
+- **Trade-off:** running the website locally now needs two programs. `make web` starts both.

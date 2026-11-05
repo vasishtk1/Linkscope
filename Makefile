@@ -39,8 +39,9 @@ sample-index: sample-scores
 	./bin/index -edges data/sample.edges.tsv -scores data/sample.scores.tsv -o data/sample-index \
 		-source "Sample: 1 Common Crawl file from $(CRAWL) (22,020 pages)"
 
-web: sample-scores
-	cd web && npm install && npm run dev
+web: sample-index
+	cd web && npm install
+	./bin/api -index data/sample-index & API=$$!; trap "kill $$API" EXIT; cd web && npm run dev
 
 RESULTS ?= data/results
 

@@ -34,7 +34,7 @@ const GROW_MS = 450;
 
 type Hover = { x: number; y: number; node: Node } | null;
 
-export function LinkGraph({ domain, backlinks }: { domain: string; backlinks: Backlink[] }) {
+export function LinkGraph({ domain, backlinks, total }: { domain: string; backlinks: Backlink[]; total: number }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hover, setHover] = useState<Hover>(null);
@@ -312,9 +312,9 @@ export function LinkGraph({ domain, backlinks }: { domain: string; backlinks: Ba
           <span className={`size-2 rounded-full ${building ? "animate-pulse bg-blue-400" : "bg-emerald-400"}`} />
           {building
             ? `Mapping backlinks… ${added} / ${shown}`
-            : shown === backlinks.length
+            : shown === total
               ? `All ${shown.toLocaleString()} linking sites`
-              : `Top ${shown.toLocaleString()} of ${backlinks.length.toLocaleString()} linking sites`}
+              : `Top ${shown.toLocaleString()} of ${total.toLocaleString()} linking sites`}
         </div>
 
         <div className="absolute right-4 top-3 flex flex-wrap items-center justify-end gap-3 rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-xs text-zinc-400 backdrop-blur">

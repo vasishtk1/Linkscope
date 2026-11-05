@@ -131,7 +131,7 @@ export function Linkscope() {
 function Results({ data }: { data: Lookup }) {
   return (
     <div className="pb-16">
-      <LinkGraph domain={data.domain} backlinks={data.backlinks} />
+      <LinkGraph domain={data.domain} backlinks={data.backlinks} total={data.linkingDomains} />
 
       <motion.section
         initial={{ opacity: 0, y: 24 }}
@@ -144,7 +144,7 @@ function Results({ data }: { data: Lookup }) {
         <h2 className="text-sm font-medium uppercase tracking-widest text-zinc-500">Stats</h2>
         <p className="mt-2 font-mono text-2xl text-zinc-100">{data.domain}</p>
         <StatCards data={data} />
-        <BacklinksTable backlinks={data.backlinks} />
+        <BacklinksTable backlinks={data.backlinks} total={data.linkingDomains} />
       </motion.section>
 
       <section className="mt-24 flex flex-col items-center gap-3 border-t border-zinc-900 pt-12">

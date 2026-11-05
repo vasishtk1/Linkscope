@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { isKnownDomain } from "@/lib/edges";
+import { isKnownDomain } from "@/lib/api";
 
 type Icon = { body: ArrayBuffer; type: string } | null;
 

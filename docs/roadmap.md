@@ -7,7 +7,7 @@
 | 2 | Distributed workers: coordinator, job leases, retries, per-job output | ✅ Done |
 | 3 | Chaos test: kill workers mid-run; output must match a clean run | Skipped for now |
 | 4 | Merge + PageRank; validate against Common Crawl's published host ranks | ✅ Done |
-| 5 | Sharded index + API; load test | In progress (index and API done) |
+| 5 | Sharded index + API; load test | In progress (index, API, and website on the API done; load test to do) |
 | 6 | Web app: search, score, link graph, pipeline dashboard | In progress (search, score, graph done; dashboard to do) |
 | 7 | Scale run + deploy | |
 

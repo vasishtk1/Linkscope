@@ -2,10 +2,17 @@
 
 The Linkscope website: Next.js (React, TypeScript), Tailwind CSS, Motion for animations, D3 for the graph physics, lucide-react icons.
 
-Until the real index exists (stage 5), the API routes read two files made from one Common Crawl file: `data/sample.edges.tsv` (the backlinks, from `make sample-edges`) and `data/sample.scores.tsv` (the PageRank scores, from `make sample-scores`). Swapping in the real API later doesn't change the page.
+The website doesn't read data files. Its API routes ask the Go lookup API (`cmd/api`, see [serve.md](serve.md)), which serves the sharded index.
 
 ```sh
-make web    # extracts the sample edges, scores them, installs packages, runs localhost:3000
+make web    # builds the sample index, starts the Go API on :8081, runs the website on localhost:3000
+```
+
+`make web` uses the sample index (one Common Crawl file). To browse a bigger run, start the API on that index and point the website at it:
+
+```sh
+./bin/api -index data/index -addr :8082
+cd web && LINKSCOPE_API=http://localhost:8082 npm run dev
 ```
 
 ## Page flow
@@ -27,11 +34,11 @@ Fonts (Geist, Geist Mono), page title and description, and the dark theme colors
 
 ### `api/lookup/route.ts` — `GET /api/lookup?domain=`
 
-Returns a `Lookup` as JSON: the domain, its 0–100 authority score (`null` if the scores file is missing), counts, and every backlink sorted by linking pages. `400` without a domain, `404` when nothing links to it.
+Returns a `Lookup` as JSON: the domain, its 0–100 authority score (`null` if the index has no scores), counts, and the top 1,000 backlinks (`PAGE_LIMIT`) sorted by linking pages. The counts always cover every backlink. `400` without a domain, `404` when nothing links to it, `503` if the Go API can't be reached.
 
 ### `api/backlinks.csv/route.ts` — `GET /api/backlinks.csv?domain=`
 
-The same backlinks as a CSV download (`linking_domain, pages, nofollow_pages, example_source, example_target`). Built on the server so large sites don't make the browser assemble thousands of rows. `csvField` quotes values containing commas, quotes or newlines.
+Every backlink as a CSV download (`linking_domain, pages, nofollow_pages, example_source, example_target`), with no 1,000 limit. Built on the server so large sites don't make the browser assemble thousands of rows. `csvField` quotes values containing commas, quotes or newlines.
 
 ### `api/favicon/route.ts` — `GET /api/favicon?domain=`
 
@@ -42,16 +49,14 @@ Fetches a site's `/favicon.ico` (then `www.` host), 3s limit each, and caches th
 
 ## lib/
 
-### `edges.ts`
+### `api.ts`
 
-- **`loadIndex()`** reads the edge file and the scores file once per server process, at the same time, and builds three things: backlinks grouped by target domain (sorted by pages), a set of every known domain, and each domain's score.
-- **`loadScores()`** reads `cmd/pagerank`'s output into a map from domain to score. If the file doesn't exist it returns an empty map, so the site still works and shows "—" for the score.
-- **`normalizeInput(input)`** turns what the user typed into a bare host: drops the scheme, path, port, and `www.`.
-- **`resolveDomain(host, known)`** drops subdomains until a known domain matches, so `blog.github.com` finds `github.com`. The real API will use the Public Suffix List like the Go code does.
-- **`lookup(input)`** resolves the domain, adds up the counts, and attaches the score.
-- **`isKnownDomain(domain)`** is used by the favicon route.
+Talks to the Go lookup API at `LINKSCOPE_API` (default `http://localhost:8081`). It's marked `server-only`, so it can't end up in the browser bundle.
 
-The paths come from `LINKSCOPE_EDGES` and `LINKSCOPE_SCORES`, defaulting to `../data/sample.edges.tsv` and `../data/sample.scores.tsv`. Both must come from the same data, so the website uses its own sample scores file instead of `data/scores.tsv`, which may come from a bigger merged run.
+- **`call(path)`** fetches from the API with no caching and a 10s limit. If the API can't be reached it throws `ApiUnavailable`, which the lookup route turns into a `503`.
+- **`lookup(input, limit = PAGE_LIMIT)`** passes the user's text straight to `GET /lookup`. The Go API does the cleanup (scheme, `www.`, subdomains), so the rules live in one place. Returns `undefined` on `404`.
+- **`isKnownDomain(domain)`** asks `GET /known`, for the favicon route.
+- **`PAGE_LIMIT` (1,000):** on the 20-file data, facebook.com's full backlink list is 17.7 MB of JSON, too much to send to a browser. The top 1,000 is more than the graph can show legibly. The CSV route passes `0` to get all of them.
 
 ### `types.ts`
 
@@ -77,7 +82,7 @@ The search box. It's given `key={query}`, so React resets it when the search in 
 The animated graph, drawn on a `<canvas>`.
 
 - **Building live:** backlinks are added strongest first, every 60ms, so the graph grows in front of the user. Each node pops in (`easeOutBack`) and its line grows out from the center (`easeOut`). The center pulses until the graph is complete.
-- **"Sites shown" slider:** 0 up to every linking site, default 60 (or all of them if there are fewer). At 0 only the searched site is shown. A timer moves the graph toward the slider's value: raising it adds the next-strongest sites, in batches of about 1/20th of the gap so big jumps don't take long, and lowering it removes the weakest. The slider writes to a ref that the timer reads, so moving it doesn't restart the graph. There's no cap, so very large numbers (thousands of sites) get crowded and can slow the animation down.
+- **"Sites shown" slider:** 0 up to every loaded linking site (at most 1,000), default 60 (or all of them if there are fewer). At 0 only the searched site is shown. A timer moves the graph toward the slider's value: raising it adds the next-strongest sites, in batches of about 1/20th of the gap so big jumps don't take long, and lowering it removes the weakest. The slider writes to a ref that the timer reads, so moving it doesn't restart the graph. There's no cap, so very large numbers (thousands of sites) get crowded and can slow the animation down.
 - **`NodeCount`:** the number next to the slider is also a text box. It shows a border on hover. Click it, type a number, then press Enter or click away to apply it; Escape cancels. Only digits can be typed, and the value is clamped to the slider's range, so typing more than the number of linking sites gives all of them, and 0 shows only the searched site. While you type, the text is kept in a separate draft, so the graph only changes once you confirm.
 - **Layout:** a D3 force simulation. Nodes push each other apart (`forceManyBody`), lines pull them toward the center (`forceLink`, shorter for sites with more pages), and `forceCollide` stops overlaps. The searched site is pinned at the center.
 - **Size:** `10 + 4·log2(pages + 1)`, so bigger means more linking pages without huge sites swallowing the screen.
@@ -95,7 +100,7 @@ Score, linking sites, linking pages, nofollow-only pages. `CountUp` animates eac
 
 ### `backlinks-table.tsx` — `BacklinksTable`
 
-First 15 rows with a "Show all" toggle. Each row: favicon (or letter badge), site, pages, link type (Followed, Nofollow, or Mixed), and an example linking page. Example links open with `rel="nofollow"`.
+First 15 rows with a toggle to show every loaded row ("Show all", or "Show top 1,000" when the site has more, with a note that the CSV has the rest). Each row: favicon (or letter badge), site, pages, link type (Followed, Nofollow, or Mixed), and an example linking page. Example links open with `rel="nofollow"`.
 
 ### `download-csv.tsx` — `DownloadCsv`
 

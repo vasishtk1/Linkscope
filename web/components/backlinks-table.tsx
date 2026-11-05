@@ -7,7 +7,7 @@ import { badgeColor, faviconUrl } from "@/lib/badge";
 
 const FIRST_ROWS = 15;
 
-export function BacklinksTable({ backlinks }: { backlinks: Backlink[] }) {
+export function BacklinksTable({ backlinks, total }: { backlinks: Backlink[]; total: number }) {
   const [all, setAll] = useState(false);
   const rows = all ? backlinks : backlinks.slice(0, FIRST_ROWS);
 
@@ -57,9 +57,19 @@ export function BacklinksTable({ backlinks }: { backlinks: Backlink[] }) {
           onClick={() => setAll(!all)}
           className="mx-auto mt-4 flex items-center gap-1 text-sm text-zinc-400 transition hover:text-zinc-100"
         >
-          {all ? "Show fewer" : `Show all ${backlinks.length.toLocaleString()}`}
+          {all
+            ? "Show fewer"
+            : backlinks.length === total
+              ? `Show all ${total.toLocaleString()}`
+              : `Show top ${backlinks.length.toLocaleString()}`}
           <ChevronDown className={`size-4 transition ${all ? "rotate-180" : ""}`} aria-hidden="true" />
         </button>
+      )}
+      {all && backlinks.length < total && (
+        <p className="mt-2 text-center text-xs text-zinc-500">
+          Showing the top {backlinks.length.toLocaleString()} of {total.toLocaleString()} linking sites. The CSV
+          download has all of them.
+        </p>
       )}
     </div>
   );

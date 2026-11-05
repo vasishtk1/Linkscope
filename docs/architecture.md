@@ -131,6 +131,8 @@ The merge follows the same order-independent rules as extraction, so the merged 
 
 `cmd/api` opens the index and answers `GET /lookup?domain=…` over HTTP. Only the directories are loaded into memory; backlink lists are read from disk per lookup. Routes in [reference/serve.md](reference/serve.md).
 
+The website's routes now call this API instead of reading data files. Pages get the top 1,000 backlinks; the CSV download gets all of them.
+
 ### Measured
 
 | | 1 file (sample) | 20 files |

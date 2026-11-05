@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
-import { lookup } from "@/lib/edges";
+import { lookup } from "@/lib/api";
 
 export async function GET(req: NextRequest) {
-  const result = await lookup(req.nextUrl.searchParams.get("domain") ?? "");
+  const result = await lookup(req.nextUrl.searchParams.get("domain") ?? "", 0);
   if (!result) {
     return new Response("no backlinks found\n", { status: 404 });
   }

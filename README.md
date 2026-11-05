@@ -37,7 +37,7 @@ make sample build
 
 On one file from the October 2026 crawl: 22,020 pages → 257,059 links to other sites → 130,138 unique domain-to-domain edges, in about 3 seconds on 8 cores.
 
-Run the website on localhost:3000 (needs Node 20+ and the sample file above). Until scores exist it shows real backlinks from the sample file:
+Run the website on localhost:3000 (needs Node 20+ and the sample file above). This builds a small index from the sample file and starts the Go lookup API next to the website:
 
 ```sh
 make web
@@ -97,7 +97,7 @@ Linkscope/
 ├── web/                       # Next.js website
 │   ├── app/                   # pages and API routes (lookup, CSV download, favicons)
 │   ├── components/            # search bar, animated link graph, stats, backlinks table
-│   └── lib/                   # loads backlink data, shared types, badge colors
+│   └── lib/                   # calls the Go lookup API, shared types, badge colors
 ├── .dockerignore              # keeps data/ and docs out of the Docker build
 ├── Dockerfile                 # builds all binaries into one small image
 ├── docker-compose.yml         # local cluster: 1 coordinator + N workers

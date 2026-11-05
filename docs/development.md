@@ -19,7 +19,7 @@
 | `make sample-edges` | Extracts `data/sample.warc.wat.gz` into `data/sample.edges.tsv` for the website |
 | `make sample-scores` | Runs PageRank on the sample edges into `data/sample.scores.tsv` for the website |
 | `make sample-index` | Builds the sample index into `data/sample-index/` from the sample edges and scores |
-| `make web` | Builds both sample files, installs the website's packages, and runs it on localhost:3000 |
+| `make web` | Builds the sample index, starts the Go API on :8081, and runs the website on localhost:3000 (Ctrl+C stops both) |
 | `make merge` | Merges every result file in `RESULTS` (default `data/results`) into `data/merged.edges.tsv.gz` (`RESULTS=data/cluster/results make merge` for the Docker cluster) |
 | `make pagerank` | Scores every domain in `data/merged.edges.tsv.gz` and writes `data/scores.tsv` |
 | `make index` | Builds the sharded backlink index in `data/index/` from `data/merged.edges.tsv.gz` and `data/scores.tsv` |
