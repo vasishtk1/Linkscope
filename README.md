@@ -67,6 +67,7 @@ Linkscope/
 │   ├── coordinator/main.go    # queues files as jobs and serves the coordinator API
 │   ├── extract/main.go        # runs the extractor on one WAT file and prints a report
 │   ├── merge/main.go          # combines all worker results into one link graph
+│   ├── pagerank/main.go       # scores every domain from the merged graph
 │   └── worker/main.go         # claims jobs, processes files, reports back
 ├── internal/
 │   ├── api/                   # request/response types shared by coordinator and worker
@@ -76,6 +77,7 @@ Linkscope/
 │   ├── jobs/                  # SQLite job list: claims, leases, retries, status
 │   ├── links/                 # URL → domain, which links count, domain link graph
 │   ├── merge/                 # combines worker result files into one link graph
+│   ├── pagerank/              # PageRank over the domain graph, 0–100 scores
 │   ├── warc/                  # reads records out of WARC/WAT files
 │   ├── wat/                   # parses WAT JSON into pages and links
 │   └── worker/                # worker loop: claim, download, extract, save, heartbeat

@@ -119,3 +119,20 @@ Each entry: what was decided, the alternatives, and why.
 - **Decision:** the merge reads every result file into one in-memory map of `src → dst` edges, then writes it out sorted.
 - **Alternatives:** an external sort-merge (sort each file, then stream through all of them at once, combining matching lines); splitting edges into shards by source domain and merging each shard separately.
 - **Why:** it's the simplest correct version, and it fits easily at the sizes we can process on a laptop. Merging one real file (130,138 edges) peaked at ~86 MB, about 650 bytes per edge. The 20-file run had 2.5 million edges before combining, so its merge needs at most ~1.6 GB, and less in practice because pairs repeat across files. A full crawl (~100,000 files) would need far more memory than one machine has, so stage 7 will switch to sharding by source domain: each shard fits in memory, and shards can be merged in parallel on different machines. Because the merge rules don't depend on order, that change won't alter the output.
+
+## One vote per linking site
+
+- **Decision:** in PageRank, each `src → dst` pair is one vote, whether 1 page or 5,000 pages on `src` link to `dst`.
+- **Alternatives:** weight each vote by the number of linking pages.
+- **Why:** page counts mostly measure how big the linking site is and how its template is built. A site whose footer links to you appears on every one of its pages. Weighting by pages would let one large site, or one spam network, decide a score. Counting linking sites is also how Common Crawl builds its own domain ranks, which keeps the comparison in stage 4 fair.
+
+## Nofollow-only links pass no score
+
+- **Decision:** an edge where every linking page uses nofollow is left out of PageRank. The domain still appears, and the link still shows on the website.
+- **Why:** nofollow, sponsored, and ugc tell search engines "this isn't an endorsement," so counting them as votes would reward paid links and comment spam. Edges with at least one followed page count as normal.
+
+## Log-scaled 0–100 score
+
+- **Decision:** the website shows a 0–100 score from the log of the raw PageRank, scaled between the lowest and highest rank in the data.
+- **Alternatives:** show raw PageRank; percentile rank.
+- **Why:** raw values like `7.61e-04` mean nothing to a reader, and they're so lopsided that a straight 0–100 scale would put almost every site at 0. A percentile would hide how far apart sites are. The trade-off is that scores are relative to the data processed, so they shift as more files are added.

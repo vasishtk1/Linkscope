@@ -111,6 +111,18 @@ The edge totals above are summed per file. The same `a.com → b.com` pair can a
 
 The merge follows the same order-independent rules as extraction, so the merged graph is the same as if every page had been processed in a single program, in any order. Details in [reference/merge.md](reference/merge.md).
 
+`cmd/pagerank` then scores every domain. Each site splits its score among the sites it links to, in rounds, until the numbers settle. Each linking site counts as one vote, and nofollow-only links don't count. The raw ranks become a 0–100 score on a log scale, written to `scores.tsv`. Details in [reference/pagerank.md](reference/pagerank.md).
+
+### Measured (one WAT file, Oct 2026 crawl)
+
+| | |
+|---|---|
+| Domains | 77,793 |
+| Edges | 130,138 |
+| Merge time | 0.50s, ~86 MB peak memory |
+| PageRank | 21 rounds, 0.06s |
+| Top 5 | facebook.com, instagram.com, google.com, twitter.com, youtube.com |
+
 ## Fault tolerance tests (stage 3)
 
 Stage 2 covers each failure above with an automated test (see the table in [reference/worker.md](reference/worker.md)). Stage 3 goes further: randomly killing workers during real runs and proving the final output matches a clean run byte for byte.

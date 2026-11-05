@@ -117,3 +117,34 @@ Parses flags, rejects extra arguments, and calls `run`.
 ### `run(in, out string) error`
 
 Lists the result files, merges them, writes the output, and prints a report: files merged, edges read, merged edges, unique domains, total linking pages, and time. It fails if the folder has no result files, so a typo in `-in` doesn't quietly produce an empty graph.
+
+## cmd/pagerank
+
+Scores every domain in the merged link graph and prints the top ones.
+
+```sh
+make pagerank                                    # data/merged.edges.tsv.gz → data/scores.tsv
+./bin/pagerank -top 50                           # print more of the ranking
+./bin/pagerank -damping 1 -max-iter 1000         # no damping, for experiments
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `-in` | `data/merged.edges.tsv.gz` | Merged link graph from `cmd/merge` |
+| `-o` | `data/scores.tsv` | Output scores |
+| `-damping` | `0.85` | Share of score that flows through links (must be above 0 and at most 1) |
+| `-max-iter` | `100` | Maximum rounds |
+| `-tol` | `1e-9` | Stop once a round changes the total by less than this |
+| `-top` | `20` | How many top domains to print |
+
+### `main()`
+
+Parses and checks flags, then calls `run`.
+
+### `run(in, out string, opts pagerank.Options, top int) error`
+
+Loads the merged graph (reusing `merge.Files` on the single input file), runs `pagerank.Compute` and `pagerank.Scores`, writes the output, and prints the domain count, rounds, timings, and top domains.
+
+### `writeScores(path string, scores []pagerank.Score) error`
+
+Writes the scores to a temp file and renames it into place, so the website never reads a half-written file.

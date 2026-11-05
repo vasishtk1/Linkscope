@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt up down clean sample sample-edges web merge
+.PHONY: build test lint fmt up down clean sample sample-edges web merge pagerank
 
 build:
 	go build -o bin/ ./cmd/...
@@ -39,3 +39,6 @@ RESULTS ?= data/results
 
 merge: build
 	./bin/merge -in $(RESULTS) -o data/merged.edges.tsv.gz
+
+pagerank: build
+	./bin/pagerank -in data/merged.edges.tsv.gz -o data/scores.tsv
