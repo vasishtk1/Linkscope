@@ -6,19 +6,41 @@ import type { Backlink, Lookup } from "./types";
 const EDGES_FILE =
   process.env.LINKSCOPE_EDGES ?? path.join(process.cwd(), "..", "data", "sample.edges.tsv");
 
+const SCORES_FILE =
+  process.env.LINKSCOPE_SCORES ?? path.join(process.cwd(), "..", "data", "sample.scores.tsv");
+
 const SOURCE = "Sample: 1 Common Crawl file from CC-MAIN-2026-43 (22,020 pages)";
 
-type Index = { byTarget: Map<string, Backlink[]>; domains: Set<string> };
+type Index = { byTarget: Map<string, Backlink[]>; domains: Set<string>; scores: Map<string, number> };
 
 let index: Promise<Index> | undefined;
 
 // loadIndex reads the edge file once and groups backlinks by the domain they point to.
 export function loadIndex(): Promise<Index> {
-  index ??= readFile(/*turbopackIgnore: true*/ EDGES_FILE, "utf8").then(buildIndex);
+  index ??= Promise.all([readFile(/*turbopackIgnore: true*/ EDGES_FILE, "utf8"), loadScores()]).then(
+    ([tsv, scores]) => ({ ...buildIndex(tsv), scores }),
+  );
   return index;
 }
 
-function buildIndex(tsv: string): Index {
+// loadScores reads cmd/pagerank's output; without the file every score shows as "—".
+async function loadScores(): Promise<Map<string, number>> {
+  const scores = new Map<string, number>();
+  let tsv: string;
+  try {
+    tsv = await readFile(/*turbopackIgnore: true*/ SCORES_FILE, "utf8");
+  } catch {
+    return scores;
+  }
+  const lines = tsv.split("\n");
+  for (let i = 1; i < lines.length; i++) {
+    const [domain, score] = lines[i].split("\t");
+    if (domain) scores.set(domain, Number(score));
+  }
+  return scores;
+}
+
+function buildIndex(tsv: string): Omit<Index, "scores"> {
   const byTarget = new Map<string, Backlink[]>();
   const domains = new Set<string>();
   const lines = tsv.split("\n");
@@ -62,7 +84,7 @@ export function resolveDomain(host: string, known: Map<string, unknown>): string
 }
 
 export async function lookup(input: string): Promise<Lookup | undefined> {
-  const { byTarget } = await loadIndex();
+  const { byTarget, scores } = await loadIndex();
   const domain = resolveDomain(normalizeInput(input), byTarget);
   if (!domain) return undefined;
   const backlinks = byTarget.get(domain)!;
@@ -74,7 +96,7 @@ export async function lookup(input: string): Promise<Lookup | undefined> {
   }
   return {
     domain,
-    score: null,
+    score: scores.get(domain) ?? null,
     linkingDomains: backlinks.length,
     linkingPages: pages,
     nofollowPages: nofollow,

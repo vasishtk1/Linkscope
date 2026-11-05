@@ -16,6 +16,9 @@
 | `make up` | Builds the Docker image and starts 1 coordinator + 4 workers (`FILES=50 WORKERS=6 make up` to change) |
 | `make down` | Stops the Docker cluster |
 | `make clean` | Deletes `bin/` |
+| `make sample-edges` | Extracts `data/sample.warc.wat.gz` into `data/sample.edges.tsv` for the website |
+| `make sample-scores` | Runs PageRank on the sample edges into `data/sample.scores.tsv` for the website |
+| `make web` | Builds both sample files, installs the website's packages, and runs it on localhost:3000 |
 | `make merge` | Merges every result file in `RESULTS` (default `data/results`) into `data/merged.edges.tsv.gz` (`RESULTS=data/cluster/results make merge` for the Docker cluster) |
 | `make pagerank` | Scores every domain in `data/merged.edges.tsv.gz` and writes `data/scores.tsv` |
 | `make cc-ranks` | Saves Common Crawl's top 1,000,000 domains (`CC_TOP`) from their web graph (`CC_GRAPH`, default `cc-main-2026-aug-sep-oct`) to `data/cc-domain-ranks.tsv` |

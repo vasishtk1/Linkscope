@@ -4,7 +4,7 @@ Distributed backlink index and domain authority engine built on Common Crawl dat
 
 Type in a domain and see who links to it, an authority score, and an interactive graph of its connections. Linkscope processes Common Crawl's public web archive across a pool of workers, extracts every link between websites, and scores domains with PageRank.
 
-> **Status:** stage 2 of 7 done (distributed workers with crash and freeze recovery). See [docs/roadmap.md](docs/roadmap.md).
+> **Status:** stages 0–2 and 4 of 7 done (distributed workers with crash and freeze recovery, merge, PageRank checked against Common Crawl's ranks); the website is in progress. See [docs/roadmap.md](docs/roadmap.md).
 
 ## How it works
 

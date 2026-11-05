@@ -2,10 +2,10 @@
 
 The Linkscope website: Next.js (React, TypeScript), Tailwind CSS, Motion for animations, D3 for the graph physics, lucide-react icons.
 
-Until the real index exists (stages 4–5), the API routes read `data/sample.edges.tsv`, the edges from one Common Crawl file, made with `make sample-edges`. The authority score is shown as "—". Swapping in the real API later doesn't change the page.
+Until the real index exists (stage 5), the API routes read two files made from one Common Crawl file: `data/sample.edges.tsv` (the backlinks, from `make sample-edges`) and `data/sample.scores.tsv` (the PageRank scores, from `make sample-scores`). Swapping in the real API later doesn't change the page.
 
 ```sh
-make web    # extracts the sample edges, installs packages, runs localhost:3000
+make web    # extracts the sample edges, scores them, installs packages, runs localhost:3000
 ```
 
 ## Page flow
@@ -27,7 +27,7 @@ Fonts (Geist, Geist Mono), page title and description, and the dark theme colors
 
 ### `api/lookup/route.ts` — `GET /api/lookup?domain=`
 
-Returns a `Lookup` as JSON: the domain, score (`null` for now), counts, and every backlink sorted by linking pages. `400` without a domain, `404` when nothing links to it.
+Returns a `Lookup` as JSON: the domain, its 0–100 authority score (`null` if the scores file is missing), counts, and every backlink sorted by linking pages. `400` without a domain, `404` when nothing links to it.
 
 ### `api/backlinks.csv/route.ts` — `GET /api/backlinks.csv?domain=`
 
@@ -44,13 +44,14 @@ Fetches a site's `/favicon.ico` (then `www.` host), 3s limit each, and caches th
 
 ### `edges.ts`
 
-- **`loadIndex()`** reads the edge file once per server process and builds two things: backlinks grouped by target domain (sorted by pages), and a set of every known domain.
+- **`loadIndex()`** reads the edge file and the scores file once per server process, at the same time, and builds three things: backlinks grouped by target domain (sorted by pages), a set of every known domain, and each domain's score.
+- **`loadScores()`** reads `cmd/pagerank`'s output into a map from domain to score. If the file doesn't exist it returns an empty map, so the site still works and shows "—" for the score.
 - **`normalizeInput(input)`** turns what the user typed into a bare host: drops the scheme, path, port, and `www.`.
 - **`resolveDomain(host, known)`** drops subdomains until a known domain matches, so `blog.github.com` finds `github.com`. The real API will use the Public Suffix List like the Go code does.
-- **`lookup(input)`** resolves the domain and adds up the counts.
+- **`lookup(input)`** resolves the domain, adds up the counts, and attaches the score.
 - **`isKnownDomain(domain)`** is used by the favicon route.
 
-The path comes from `LINKSCOPE_EDGES`, defaulting to `../data/sample.edges.tsv`.
+The paths come from `LINKSCOPE_EDGES` and `LINKSCOPE_SCORES`, defaulting to `../data/sample.edges.tsv` and `../data/sample.scores.tsv`. Both must come from the same data, so the website uses its own sample scores file instead of `data/scores.tsv`, which may come from a bigger merged run.
 
 ### `types.ts`
 
@@ -88,7 +89,9 @@ The animated graph, drawn on a `<canvas>`.
 
 ### `stat-cards.tsx` — `StatCards`, `CountUp`
 
-Score, linking sites, linking pages, nofollow-only pages. `CountUp` animates each number from 0 the first time it scrolls into view.
+Score, linking sites, linking pages, nofollow-only pages. `CountUp` animates each number from 0 the first time it scrolls into view. The score shows as "58 / 100", or "—" when there's no score.
+
+**Why "linking sites" can be higher than the PageRank count:** the card counts every site that links, including nofollow-only ones. PageRank's `linking_domains` leaves those out, since they pass no score.
 
 ### `backlinks-table.tsx` — `BacklinksTable`
 

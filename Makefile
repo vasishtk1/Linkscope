@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt up down clean sample sample-edges web merge pagerank cc-ranks validate
+.PHONY: build test lint fmt up down clean sample sample-edges sample-scores web merge pagerank cc-ranks validate
 
 build:
 	go build -o bin/ ./cmd/...
@@ -32,7 +32,10 @@ sample:
 sample-edges: build
 	./bin/extract -o data/sample.edges.tsv -top 0 data/sample.warc.wat.gz
 
-web: sample-edges
+sample-scores: sample-edges
+	./bin/pagerank -in data/sample.edges.tsv -o data/sample.scores.tsv -top 0
+
+web: sample-scores
 	cd web && npm install && npm run dev
 
 RESULTS ?= data/results

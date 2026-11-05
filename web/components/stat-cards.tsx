@@ -8,8 +8,15 @@ export function StatCards({ data }: { data: Lookup }) {
   const followed = data.linkingPages - data.nofollowPages;
   return (
     <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <Card label="Authority score" note="Calculated with PageRank once the full link graph is built">
-        <span className="text-zinc-500">{data.score ?? "—"}</span>
+      <Card label="Authority score" note="PageRank on a 0–100 scale, relative to every site in this data">
+        {data.score === null ? (
+          <span className="text-zinc-500">—</span>
+        ) : (
+          <span className="text-blue-400">
+            <CountUp value={data.score} />
+            <span className="text-lg font-normal text-zinc-500"> / 100</span>
+          </span>
+        )}
       </Card>
       <Card label="Linking sites" note="Different websites that link here">
         <CountUp value={data.linkingDomains} />
