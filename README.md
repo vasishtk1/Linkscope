@@ -66,6 +66,7 @@ Linkscope/
 ├── cmd/
 │   ├── coordinator/main.go    # queues files as jobs and serves the coordinator API
 │   ├── extract/main.go        # runs the extractor on one WAT file and prints a report
+│   ├── merge/main.go          # combines all worker results into one link graph
 │   └── worker/main.go         # claims jobs, processes files, reports back
 ├── internal/
 │   ├── api/                   # request/response types shared by coordinator and worker
@@ -74,6 +75,7 @@ Linkscope/
 │   ├── fixture/               # builds fake Common Crawl files for tests
 │   ├── jobs/                  # SQLite job list: claims, leases, retries, status
 │   ├── links/                 # URL → domain, which links count, domain link graph
+│   ├── merge/                 # combines worker result files into one link graph
 │   ├── warc/                  # reads records out of WARC/WAT files
 │   ├── wat/                   # parses WAT JSON into pages and links
 │   └── worker/                # worker loop: claim, download, extract, save, heartbeat

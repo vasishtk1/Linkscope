@@ -94,3 +94,26 @@ Runs one worker until the coordinator says all work is done.
 ### `main()`
 
 Parses flags, prefixes every log line with the worker's id (so logs from many workers can be told apart), sets up Ctrl+C / `SIGTERM` handling, and runs the worker. On Ctrl+C the worker hands its current job back with `Release` before exiting.
+
+## cmd/merge
+
+Combines every worker result file in a folder into one merged link graph.
+
+```sh
+make merge                                              # data/results → data/merged.edges.tsv.gz
+./bin/merge -in data/cluster/results                    # results from the Docker cluster
+./bin/merge -in data/results -o data/merged.edges.tsv   # plain text instead of gzip
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `-in` | `data/results` | Folder of `*.edges.tsv.gz` result files |
+| `-o` | `data/merged.edges.tsv.gz` | Output file (gzipped if it ends in `.gz`) |
+
+### `main()`
+
+Parses flags, rejects extra arguments, and calls `run`.
+
+### `run(in, out string) error`
+
+Lists the result files, merges them, writes the output, and prints a report: files merged, edges read, merged edges, unique domains, total linking pages, and time. It fails if the folder has no result files, so a typo in `-in` doesn't quietly produce an empty graph.

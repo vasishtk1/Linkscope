@@ -16,6 +16,7 @@
 | `make up` | Builds the Docker image and starts 1 coordinator + 4 workers (`FILES=50 WORKERS=6 make up` to change) |
 | `make down` | Stops the Docker cluster |
 | `make clean` | Deletes `bin/` |
+| `make merge` | Merges every result file in `RESULTS` (default `data/results`) into `data/merged.edges.tsv.gz` (`RESULTS=data/cluster/results make merge` for the Docker cluster) |
 | `make sample` | Downloads the first WAT file of the crawl in `CRAWL` (default `CC-MAIN-2026-43`) to `data/sample.warc.wat.gz` |
 
 ## Running a cluster without Docker

@@ -105,6 +105,12 @@ With 4 workers, each job took 13–33s (avg 20s), versus ~8s when running alone.
 
 The edge totals above are summed per file. The same `a.com → b.com` pair can appear in several files; combining them into unique edges is the merge step in stage 4.
 
+## Stage 4: merge
+
+`cmd/merge` reads every result file and combines repeated `src → dst` pairs into one edge, adding up their page counts. The output, `merged.edges.tsv.gz`, is the full domain link graph that PageRank scores.
+
+The merge follows the same order-independent rules as extraction, so the merged graph is the same as if every page had been processed in a single program, in any order. Details in [reference/merge.md](reference/merge.md).
+
 ## Fault tolerance tests (stage 3)
 
 Stage 2 covers each failure above with an automated test (see the table in [reference/worker.md](reference/worker.md)). Stage 3 goes further: randomly killing workers during real runs and proving the final output matches a clean run byte for byte.

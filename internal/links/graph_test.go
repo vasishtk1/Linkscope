@@ -3,6 +3,7 @@ package links
 import (
 	"bytes"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -72,5 +73,56 @@ func TestWriteTSV(t *testing.T) {
 		"a.com\tb.com\t3\t1\thttps://a.com/\thttps://b.com/\n"
 	if buf.String() != want {
 		t.Fatalf("got %q", buf.String())
+	}
+}
+
+func TestReadTSVRoundTrip(t *testing.T) {
+	want := []Edge{
+		{Src: "a.com", Dst: "b.com", Pages: 3, NofollowPages: 1, ExampleSrc: "https://a.com/", ExampleDst: "https://b.com/"},
+		{Src: "a.com", Dst: "c.com", Pages: 1, NofollowPages: 0, ExampleSrc: "https://a.com/x", ExampleDst: "https://c.com/y"},
+	}
+	var buf bytes.Buffer
+	if err := WriteTSV(&buf, want); err != nil {
+		t.Fatal(err)
+	}
+	var got []Edge
+	if err := ReadTSV(&buf, func(e Edge) error { got = append(got, e); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestReadTSVRejectsBadInput(t *testing.T) {
+	header := "src\tdst\tpages\tnofollow_pages\texample_src\texample_dst\n"
+	for name, in := range map[string]string{
+		"empty":           "",
+		"wrong header":    "a\tb\n",
+		"too few fields":  header + "a.com\tb.com\t1\n",
+		"bad pages":       header + "a.com\tb.com\tx\t0\tu\tv\n",
+		"nofollow > page": header + "a.com\tb.com\t1\t2\tu\tv\n",
+		"empty domain":    header + "\tb.com\t1\t0\tu\tv\n",
+	} {
+		if err := ReadTSV(strings.NewReader(in), func(Edge) error { return nil }); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+}
+
+func TestAddEdgeSumsCountsAndKeepsSmallestExample(t *testing.T) {
+	a := Edge{Src: "a.com", Dst: "b.com", Pages: 2, NofollowPages: 1, ExampleSrc: "https://a.com/z", ExampleDst: "https://b.com/"}
+	b := Edge{Src: "a.com", Dst: "b.com", Pages: 5, NofollowPages: 0, ExampleSrc: "https://a.com/a", ExampleDst: "https://b.com/q"}
+	ab, ba := NewGraph(), NewGraph()
+	ab.AddEdge(a)
+	ab.AddEdge(b)
+	ba.AddEdge(b)
+	ba.AddEdge(a)
+	if !reflect.DeepEqual(ab.Edges(), ba.Edges()) {
+		t.Fatalf("order changed the result:\n%+v\n%+v", ab.Edges(), ba.Edges())
+	}
+	e := ab.Edges()[0]
+	if e.Pages != 7 || e.NofollowPages != 1 || e.ExampleSrc != "https://a.com/a" || e.ExampleDst != "https://b.com/q" {
+		t.Fatalf("merged edge = %+v", e)
 	}
 }

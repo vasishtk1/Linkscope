@@ -2,9 +2,12 @@ package links
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
+	"strings"
 )
 
 type Edge struct {
@@ -62,6 +65,21 @@ func (g *Graph) Add(o Outlinks) {
 	}
 }
 
+// AddEdge merges an already-counted edge, e.g. one read back from a worker's result file.
+func (g *Graph) AddEdge(e Edge) {
+	k := edgeKey{e.Src, e.Dst}
+	cur, ok := g.edges[k]
+	if !ok {
+		g.edges[k] = &e
+		return
+	}
+	cur.Pages += e.Pages
+	cur.NofollowPages += e.NofollowPages
+	if e.ExampleSrc < cur.ExampleSrc || (e.ExampleSrc == cur.ExampleSrc && e.ExampleDst < cur.ExampleDst) {
+		cur.ExampleSrc, cur.ExampleDst = e.ExampleSrc, e.ExampleDst
+	}
+}
+
 func (g *Graph) Len() int { return len(g.edges) }
 
 // Edges returns all edges sorted by source then destination.
@@ -79,11 +97,63 @@ func (g *Graph) Edges() []Edge {
 	return out
 }
 
+const tsvHeader = "src\tdst\tpages\tnofollow_pages\texample_src\texample_dst"
+
 func WriteTSV(w io.Writer, edges []Edge) error {
 	bw := bufio.NewWriter(w)
-	fmt.Fprintln(bw, "src\tdst\tpages\tnofollow_pages\texample_src\texample_dst")
+	fmt.Fprintln(bw, tsvHeader)
 	for _, e := range edges {
 		fmt.Fprintf(bw, "%s\t%s\t%d\t%d\t%s\t%s\n", e.Src, e.Dst, e.Pages, e.NofollowPages, e.ExampleSrc, e.ExampleDst)
 	}
 	return bw.Flush()
+}
+
+// ReadTSV reads a file written by WriteTSV and calls fn for each edge.
+func ReadTSV(r io.Reader, fn func(Edge) error) error {
+	br := bufio.NewReader(r)
+	for n := 1; ; n++ {
+		line, err := br.ReadString('\n')
+		if errors.Is(err, io.EOF) && line == "" {
+			if n == 1 {
+				return errors.New("empty file: missing header")
+			}
+			return nil
+		}
+		if err != nil && !errors.Is(err, io.EOF) {
+			return err
+		}
+		line = strings.TrimSuffix(line, "\n")
+		if n == 1 {
+			if line != tsvHeader {
+				return fmt.Errorf("line 1: unexpected header %q", line)
+			}
+			continue
+		}
+		e, perr := parseEdge(line)
+		if perr != nil {
+			return fmt.Errorf("line %d: %w", n, perr)
+		}
+		if ferr := fn(e); ferr != nil {
+			return ferr
+		}
+	}
+}
+
+func parseEdge(line string) (Edge, error) {
+	f := strings.Split(line, "\t")
+	if len(f) != 6 {
+		return Edge{}, fmt.Errorf("want 6 fields, got %d", len(f))
+	}
+	pages, err := strconv.Atoi(f[2])
+	if err != nil || pages < 1 {
+		return Edge{}, fmt.Errorf("bad pages %q", f[2])
+	}
+	nofollow, err := strconv.Atoi(f[3])
+	if err != nil || nofollow < 0 || nofollow > pages {
+		return Edge{}, fmt.Errorf("bad nofollow_pages %q", f[3])
+	}
+	if f[0] == "" || f[1] == "" {
+		return Edge{}, errors.New("empty domain")
+	}
+	return Edge{Src: f[0], Dst: f[1], Pages: pages, NofollowPages: nofollow, ExampleSrc: f[4], ExampleDst: f[5]}, nil
 }

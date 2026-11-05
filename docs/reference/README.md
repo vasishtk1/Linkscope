@@ -11,9 +11,10 @@ Every package and function, documented here instead of in code comments. Each en
 | [internal/jobs](jobs.md) | The coordinator's job list in SQLite: claims, leases, retries |
 | [internal/coordinator, internal/api](coordinator.md) | The coordinator's HTTP API and the request/response types |
 | [internal/worker](worker.md) | The worker loop: claim, download, extract, save, report, heartbeat |
+| [internal/merge](merge.md) | Combines every worker's result file into one link graph |
 | [internal/fixture](#internalfixture) | Builds fake Common Crawl files for tests |
 | [web/](web.md) | The website: pages, API routes, animated graph |
-| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker` |
+| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge` |
 
 ## How the packages connect
 
@@ -32,6 +33,13 @@ cmd/coordinator ── coordinator.Server ── jobs.Store (SQLite)
        │  HTTP: claim / heartbeat / complete / fail / release   (types in internal/api)
        ▼
 cmd/worker ── worker.Worker ── fetch from Common Crawl ── extract.Run() ── result .edges.tsv.gz
+```
+
+**Combining the results (stage 4):**
+
+```
+results/*.edges.tsv.gz → merge.ResultFiles() → merge.Files() → links.ReadTSV() → Graph.AddEdge() → merge.WriteFile()
+                                                                                                    merged.edges.tsv.gz
 ```
 
 ## internal/fixture

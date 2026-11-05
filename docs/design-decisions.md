@@ -113,3 +113,9 @@ Each entry: what was decided, the alternatives, and why.
 
 - **Decision:** results are written as `.edges.tsv.gz`.
 - **Why:** each file's edges are ~21 MB as plain text and about 3.5 MB gzipped, so 100,000 files would be ~2 TB plain versus ~350 GB compressed. The merge step in stage 4 reads them as a stream, so compression costs very little.
+
+## Merge in memory for now
+
+- **Decision:** the merge reads every result file into one in-memory map of `src → dst` edges, then writes it out sorted.
+- **Alternatives:** an external sort-merge (sort each file, then stream through all of them at once, combining matching lines); splitting edges into shards by source domain and merging each shard separately.
+- **Why:** it's the simplest correct version, and it fits easily at the sizes we can process on a laptop. Merging one real file (130,138 edges) peaked at ~86 MB, about 650 bytes per edge. The 20-file run had 2.5 million edges before combining, so its merge needs at most ~1.6 GB, and less in practice because pairs repeat across files. A full crawl (~100,000 files) would need far more memory than one machine has, so stage 7 will switch to sharding by source domain: each shard fits in memory, and shards can be merged in parallel on different machines. Because the merge rules don't depend on order, that change won't alter the output.

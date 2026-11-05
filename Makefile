@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt up down clean sample sample-edges web
+.PHONY: build test lint fmt up down clean sample sample-edges web merge
 
 build:
 	go build -o bin/ ./cmd/...
@@ -34,3 +34,8 @@ sample-edges: build
 
 web: sample-edges
 	cd web && npm install && npm run dev
+
+RESULTS ?= data/results
+
+merge: build
+	./bin/merge -in $(RESULTS) -o data/merged.edges.tsv.gz

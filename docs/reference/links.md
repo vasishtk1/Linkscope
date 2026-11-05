@@ -81,6 +81,15 @@ Adds one page's links.
 
 **Why "smallest" instead of "first":** the result must be identical no matter what order pages arrive in. Pages arrive in a different order every run when several goroutines parse in parallel, and in a different order again when the distributed workers' outputs are merged in Stage 2. Choosing the minimum makes `Add` order-independent, the same way `+` is. Stage 3's crash test relies on this: a run with crashes must produce byte-identical output to a clean run.
 
+### `(*Graph) AddEdge(e Edge)`
+
+Adds an edge that was already counted, such as one read back from a worker's result file. Used by the merge in stage 4.
+
+- If the `Src → Dst` pair is new, the edge is stored as-is.
+- If it already exists, `Pages` and `NofollowPages` are added together, and the example link becomes whichever is alphabetically smaller.
+
+This follows the same rules as `Add`, so the merged result is the same no matter what order the files are read in. Adding up per-file counts is correct because each page lives in exactly one Common Crawl file, so no page is counted twice.
+
 ### `(*Graph) Len() int`
 
 Number of edges.
@@ -92,3 +101,18 @@ All edges, sorted by `Src` and then `Dst`. Sorting gives a stable, comparable ou
 ### `WriteTSV(w io.Writer, edges []Edge) error`
 
 Writes edges as tab-separated values with a header row. TSV is safe here because tabs can't appear in parsed URLs or domains (Go's URL parser rejects control characters).
+
+### `ReadTSV(r io.Reader, fn func(Edge) error) error`
+
+Reads a file written by `WriteTSV` and calls `fn` once per edge, in file order.
+
+- Checks the header row, so a file in the wrong format fails right away instead of producing garbage.
+- Errors include the line number (`line 4012: bad pages "x"`).
+- Rejects lines without exactly 6 fields, page counts below 1, a nofollow count that's negative or larger than the page count, and empty domains.
+- If `fn` returns an error, reading stops and that error is returned.
+
+**Why a callback instead of returning a slice:** the caller decides what to do with each edge as it's read. The merge adds each edge straight into one shared graph, so a file's edges never need to be held in memory as a separate list first.
+
+### `parseEdge(line string) (Edge, error)`
+
+Splits one TSV line into an `Edge` and runs the checks above.
