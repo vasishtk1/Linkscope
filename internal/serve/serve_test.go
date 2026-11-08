@@ -98,6 +98,24 @@ func TestKnown(t *testing.T) {
 	}
 }
 
+func TestNetwork(t *testing.T) {
+	srv := newServer(t)
+	var nw index.Network
+	if code := get(t, srv.URL+"/network", &nw); code != 200 {
+		t.Fatalf("status %d", code)
+	}
+	// Only github.com has a score, so it's the whole network.
+	if len(nw.Nodes) != 1 || nw.Nodes[0].Domain != "github.com" || nw.Links == nil || len(nw.Links) != 0 {
+		t.Fatalf("got %+v", nw)
+	}
+	for _, q := range []string{"0", "201", "x"} {
+		var body map[string]string
+		if code := get(t, srv.URL+"/network?n="+q, &body); code != 400 || body["error"] == "" {
+			t.Errorf("n=%s: status %d body %v", q, code, body)
+		}
+	}
+}
+
 func TestStatsAndHealth(t *testing.T) {
 	srv := newServer(t)
 	var m index.Manifest

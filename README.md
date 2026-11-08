@@ -84,7 +84,7 @@ Linkscope/
 │   ├── loadtest/              # runs many lookups at once and records latencies
 │   ├── merge/                 # combines worker result files into one link graph
 │   ├── pagerank/              # PageRank over the domain graph, 0–100 scores
-│   ├── serve/                 # lookup API routes: /lookup, /known, /stats
+│   ├── serve/                 # lookup API routes: /lookup, /known, /network, /stats
 │   ├── validate/              # rank agreement with Common Crawl's published ranks
 │   ├── warc/                  # reads records out of WARC/WAT files
 │   ├── wat/                   # parses WAT JSON into pages and links

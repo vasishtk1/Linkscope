@@ -6,13 +6,17 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/vasishtk1/Linkscope/internal/index"
 )
 
+const maxNetwork = 200
+
 // Handler serves lookups from an open index; every route is read-only, so requests run in parallel without locks.
 func Handler(ix *index.Index) http.Handler {
 	mux := http.NewServeMux()
+	network := sync.OnceValues(func() (index.Network, error) { return ix.Network(maxNetwork) })
 	mux.HandleFunc("GET /lookup", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query().Get("domain")
 		if strings.TrimSpace(q) == "" {
@@ -42,6 +46,24 @@ func Handler(ix *index.Index) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"known": true})
+	})
+	mux.HandleFunc("GET /network", func(w http.ResponseWriter, r *http.Request) {
+		n := 60
+		if q := r.URL.Query().Get("n"); q != "" {
+			v, err := strconv.Atoi(q)
+			if err != nil || v < 1 || v > maxNetwork {
+				writeJSON(w, http.StatusBadRequest, errorBody("n must be a whole number from 1 to 200"))
+				return
+			}
+			n = v
+		}
+		nw, err := network()
+		if err != nil {
+			log.Printf("network: %v", err)
+			writeJSON(w, http.StatusInternalServerError, errorBody("index read failed"))
+			return
+		}
+		writeJSON(w, http.StatusOK, nw.Top(n))
 	})
 	mux.HandleFunc("GET /stats", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, ix.Manifest())

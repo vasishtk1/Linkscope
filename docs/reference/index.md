@@ -129,6 +129,26 @@ Tries the host, then drops subdomains one at a time until it finds a domain that
 
 `Normalize`, then `Resolve`, then `Backlinks`. Returns `nil` (not an error) when nothing links to the site.
 
+## network.go
+
+The data behind the animated background on the website's landing page: the most important sites and the links among them. It's the network we measured, not a made-up picture.
+
+### `NetworkNode`, `NetworkLink`, `Network`
+
+`Network` is `Nodes` (`domain`, `score`) plus `Links` (`source` links to `target` on `pages` pages). `Links` is always a list, never `null`, so the website doesn't have to check.
+
+### `(*Index) Network(n int) (Network, error)`
+
+1. Goes through every directory entry and keeps sites that have a score and at least one backlink. A site nothing links to would have no lines in the picture.
+2. Sorts by score, highest first. Scores are whole numbers, so many sites tie; ties go to the site with more linking domains, then by name, so the answer is always the same.
+3. Keeps the first `n`, reads each one's full backlink list, and keeps only the backlinks that come from another site in the top `n`.
+
+It scans all directories and reads whole backlink lists, so it's slower than a lookup. The API runs it once and caches the answer (see `serve.md`). On the 1-file sample, the top 60 sites have 77 links among them, and the first call took 0.11s.
+
+### `(Network) Top(n int) Network`
+
+The first `n` nodes and only the links whose two ends are both kept. Because `Network` is sorted, the top 60 of the top 200 is the same as asking for the top 60 directly. This lets the API compute once for the largest size and answer any smaller one.
+
 ## Tests
 
 | Test | Checks |
@@ -144,6 +164,7 @@ Tries the host, then drops subdomains one at a time until it finds a domain that
 | `TestRebuildReplacesOldIndex` | Rebuilding with fewer shards leaves no old shards or temp folders |
 | `TestOpenRejectsDamagedShard` | A cut-off shard fails to open |
 | `TestBuildRejectsZeroShards` | Bad option is an error |
+| `TestNetworkPicksTopSitesAndLinksAmongThem` | Highest scores first, sites without backlinks skipped, ties go to more linking domains, only links inside the top N, `Top` drops links to removed sites |
 | `TestNormalize` | Scheme, case, path, port, `user@`, trailing dot; `www.` kept |
 
 The index was also checked against the raw edges on real data. Every domain with backlinks was looked up and compared row by row with the edge file: all 62,052 on the 1-file sample and all 462,254 on the 20-file run matched.
