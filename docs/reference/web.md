@@ -22,6 +22,8 @@ cd web && LINKSCOPE_API=http://localhost:8082 npm run dev
 3. **Scroll down:** stats cards and the backlinks table.
 4. **Bottom:** "Download backlinks CSV".
 
+The **Pipeline** link in the header opens `/pipeline`, a live dashboard of the coordinator and workers while a run is going (see `pipeline.tsx` below).
+
 ## app/
 
 ### `page.tsx`
@@ -51,6 +53,14 @@ Fetches a site's `/favicon.ico` (then `www.` host), 3s limit each, and caches th
 
 The top 60 sites and the links among them, from the Go API's `/network?n=60`, for the landing page background. Browsers may cache it for an hour (`Cache-Control: public, max-age=3600`), since it only changes when the index is rebuilt. `503` if the Go API can't be reached; the background then shows only its drifting dots.
 
+### `api/pipeline/route.ts` — `GET /api/pipeline`
+
+The coordinator's `/status` and `/timeline` combined into one answer, `{status, jobs}`, so the dashboard makes one request per update. `503` when no coordinator answers.
+
+### `pipeline/page.tsx`
+
+The `/pipeline` page: the shared header (with "Pipeline" marked as the current page), the same blue glow as the home page, and the `Pipeline` component. It doesn't use the animated network background, which would compete with the charts and cost CPU on a page that's already updating every second.
+
 ## lib/
 
 ### `api.ts`
@@ -63,9 +73,17 @@ Talks to the Go lookup API at `LINKSCOPE_API` (default `http://localhost:8081`).
 - **`network(n)`** asks `GET /network?n=`, for the background.
 - **`PAGE_LIMIT` (1,000):** on the 20-file data, facebook.com's full backlink list is 17.7 MB of JSON, too much to send to a browser. The top 1,000 is more than the graph can show legibly. The CSV route passes `0` to get all of them.
 
+### `pipeline.ts`
+
+Talks to the coordinator at `LINKSCOPE_COORDINATOR` (default `http://localhost:8080`). Also `server-only`.
+
+- **`pipeline()`** fetches `/status` and `/timeline` at the same time (`Promise.all`) and returns both.
+- **3s limit, not 10s:** the dashboard asks every second, so a coordinator that isn't there should fail fast and show "No pipeline is running" instead of hanging.
+- Throws `CoordinatorUnavailable` when the coordinator can't be reached or answers with an error.
+
 ### `types.ts`
 
-`Backlink`, `Lookup` and `Network`, the shapes the API returns.
+`Backlink`, `Lookup` and `Network`, the shapes the lookup API returns. `PipelineStatus`, `PipelineWorker`, `FinishedJob` and `Pipeline` match the coordinator's JSON.
 
 ### `badge.ts`
 
@@ -73,6 +91,10 @@ Talks to the Go lookup API at `LINKSCOPE_API` (default `http://localhost:8081`).
 - **`faviconUrl(domain)`** builds the favicon route URL.
 
 ## components/
+
+### `site-header.tsx` — `SiteHeader`
+
+The header on both pages: the logo (a link home, which also clears a search) plus "Pipeline" and "GitHub" links. `active="pipeline"` highlights the Pipeline link and sets `aria-current="page"` for screen readers.
 
 ### `linkscope.tsx` — `Linkscope`
 
@@ -104,6 +126,28 @@ A full-screen canvas behind the landing page that slowly flies forward through t
 | After a search | The component is unmounted, so nothing runs |
 
 Icons come through `/api/favicon`, the same cached route the graph uses, so only sites from our own data are fetched.
+
+### `pipeline.tsx` — `Pipeline`
+
+The live pipeline dashboard. Top to bottom:
+
+| Part | Shows |
+|---|---|
+| Run badge | Running, Run finished, Waiting for jobs, or Disconnected |
+| Stat tiles | Files done of total, pages processed, links found, unique site pairs (summed per file, before merging), pages per second averaged over the run, and how long the run has taken |
+| Progress bar | Done, running, waiting and failed files, with counts in the key below so it's never color alone |
+| Workers | One card per worker: its state (dot plus word), the file it's on and for how long, and its totals |
+| Timeline | One row per worker and one bar per file, placed by when it started and finished. Running files pulse and grow; files that needed a retry get an amber outline. Hover a bar for its file, worker, time, pages and attempt |
+| Pages over time | A step line of total pages processed. It steps up each time a file finishes, because that's when its pages are counted. Hover for the total at that moment |
+| Failed files | Only shown when some failed: the file, its attempts and the last error |
+| Recently finished | The last 8 files with worker, pages, site pairs and time taken |
+
+- **`usePipeline`** polls `/api/pipeline` every second, or every 3 seconds while no coordinator answers, so the page lights up on its own a few seconds after a run starts. It stops while the tab is hidden and resumes when you come back. A `busy` flag makes sure two requests never overlap, so a slow answer can't start a second polling chain. If the coordinator disappears mid-run, the last update stays on screen with a notice instead of going blank.
+- **`runShape`** puts every job on the coordinator's clock (`status.now`). A finished job runs from `finishedAt − durationMs` to `finishedAt`. A running job runs from `now − jobSeconds` to `now`. The run starts at the earliest start and ends at the last finish, or at `now` while it's still going. Using the coordinator's clock means the bars are right even if the browser's clock is off.
+- **Pages per second** is the run's pages divided by its length. It's not the coordinator's `pagesPerSecond`, which also counts any time the coordinator sat waiting before workers arrived.
+- **No chart library:** the timeline is positioned `div`s (left and width as percentages of the run), and the pages chart is one SVG path stretched to the box (`vector-effect: non-scaling-stroke` keeps the line 2px). Axis ticks pick a step (1s, 2s, 5s, … 2h) that gives at most about 6 labels.
+- **Colors:** one blue for work, gray for waiting, red only for failures (with an icon and words), green only for a finished run or worker.
+- **`NoPipeline`** is shown when nothing answers, with the two commands that start a run: `make demo` and `make up`.
 
 ### `search-bar.tsx` — `SearchBar`
 

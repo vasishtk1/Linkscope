@@ -159,6 +159,19 @@ The website's routes now call this API instead of reading data files. Pages get 
 
 Every domain with backlinks was looked up in the index and compared row by row with the edge file, and all of them matched.
 
+## Stage 6: pipeline dashboard
+
+```
+browser (/pipeline) ──every 1s──▶ website /api/pipeline ──▶ coordinator GET /status + GET /timeline ──▶ SQLite jobs table
+```
+
+The coordinator already knew everything about the run: the jobs table has each file's state, results and timing, and every worker request passes through it. The dashboard adds no new moving parts, only two read-only views:
+
+- **`/status` now lists workers.** The coordinator remembers in memory when it last heard from each worker and which file it's on. Workers already send claims and heartbeats, so this costs no extra requests. A worker silent for longer than a lease is shown as "No contact", the same rule the coordinator uses to hand its job to someone else.
+- **`/timeline`** returns every finished file with its worker and timing, from the jobs table. Finished jobs now keep their worker's name so each file can be drawn on its worker's row.
+
+Details: [coordinator.md](reference/coordinator.md), [web.md](reference/web.md).
+
 ## Fault tolerance tests (stage 3)
 
 Stage 2 covers each failure above with an automated test (see the table in [reference/worker.md](reference/worker.md)). Stage 3 goes further: randomly killing workers during real runs and proving the final output matches a clean run byte for byte.

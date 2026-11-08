@@ -10,6 +10,7 @@ import { StatCards } from "./stat-cards";
 import { BacklinksTable } from "./backlinks-table";
 import { DownloadCsv } from "./download-csv";
 import { NetworkBackground } from "./network-background";
+import { SiteHeader } from "./site-header";
 
 type Outcome = { kind: "found"; data: Lookup } | { kind: "missing" } | { kind: "error" };
 type State = { kind: "idle" } | { kind: "loading" } | Outcome;
@@ -66,21 +67,7 @@ export function Linkscope() {
         className="pointer-events-none absolute inset-x-0 top-0 h-[600px] bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.12),transparent_60%)]"
       />
 
-      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-        <button
-          onClick={() => router.push("/")}
-          className="flex items-center gap-2 text-sm font-semibold tracking-tight text-zinc-100"
-        >
-          <Logo />
-          Linkscope
-        </button>
-        <a
-          href="https://github.com/vasishtk1/Linkscope"
-          className="text-sm text-zinc-400 transition hover:text-zinc-100"
-        >
-          GitHub
-        </a>
-      </header>
+      <SiteHeader />
 
       <main className="relative z-10 mx-auto max-w-6xl px-6">
         <motion.section
@@ -177,17 +164,5 @@ function Message({ children }: { children: React.ReactNode }) {
     >
       {children}
     </motion.p>
-  );
-}
-
-function Logo() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 28 28" fill="none" stroke="#60a5fa" strokeWidth="2" aria-hidden="true">
-      <circle cx="14" cy="14" r="4" />
-      <circle cx="5" cy="6" r="2.5" />
-      <circle cx="23" cy="6" r="2.5" />
-      <circle cx="22" cy="23" r="2.5" />
-      <path d="M7 7.5 11 11.5M21 7.5l-4 4M20.5 21l-3.5-4" />
-    </svg>
   );
 }

@@ -8,7 +8,7 @@
 | 3 | Chaos test: kill workers mid-run; output must match a clean run | Skipped for now |
 | 4 | Merge + PageRank; validate against Common Crawl's published host ranks | ✅ Done |
 | 5 | Sharded index + API; load test | ✅ Done |
-| 6 | Web app: search, score, link graph, pipeline dashboard | In progress (search, score, graph done; dashboard to do) |
+| 6 | Web app: search, score, link graph, pipeline dashboard | ✅ Done |
 | 7 | Scale run + deploy | |
 
 ## Future
