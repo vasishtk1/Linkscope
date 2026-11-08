@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt up down clean sample sample-edges sample-scores sample-index web merge pagerank index api loadtest cc-ranks validate
+.PHONY: build test lint fmt up down clean sample sample-edges sample-scores sample-index web merge pagerank index api loadtest cc-ranks validate demo
 
 build:
 	go build -o bin/ ./cmd/...
@@ -73,3 +73,22 @@ cc-ranks:
 
 validate: build
 	./bin/validate -scores data/scores.tsv -ranks data/cc-domain-ranks.tsv
+
+DEMO_FILES ?= 6
+DEMO_WORKERS ?= 3
+
+demo: build
+	@test -f data/sample.warc.wat.gz || $(MAKE) sample
+	rm -rf data/demo && mkdir -p data/demo/files
+	for i in $$(seq 1 $(DEMO_FILES)); do \
+		ln -s ../../sample.warc.wat.gz data/demo/files/demo-$$i.warc.wat.gz; echo demo-$$i.warc.wat.gz; \
+	done > data/demo/paths.txt
+	@pids=""; trap 'kill $$pids 2>/dev/null' EXIT; \
+	python3 -m http.server 8090 -b 127.0.0.1 -d data/demo/files >/dev/null 2>&1 & pids="$$pids $$!"; \
+	./bin/coordinator -db data/demo/jobs.db -paths data/demo/paths.txt -limit 0 & pids="$$pids $$!"; \
+	sleep 1; \
+	for i in $$(seq 1 $(DEMO_WORKERS)); do \
+		./bin/worker -id worker-$$i -source http://127.0.0.1:8090 -out data/demo/results -parsers 1 & pids="$$pids $$!"; \
+	done; \
+	echo "Watch it at http://localhost:3000/pipeline (start the site with 'make web'). Ctrl+C stops the demo."; \
+	wait
