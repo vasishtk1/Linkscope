@@ -169,7 +169,7 @@ func (s *Store) Heartbeat(id int64, attempt int, lease time.Duration, now time.T
 func (s *Store) Complete(id int64, r Result, now time.Time) error {
 	_, err := s.db.Exec(`
 		UPDATE jobs
-		SET state = 'done', worker = '', lease_expires = 0, last_error = '',
+		SET state = 'done', lease_expires = 0, last_error = '',
 		    pages = ?, cross_links = ?, edges = ?, duration_ms = ?, finished_at = ?
 		WHERE id = ? AND state != 'done'`,
 		r.Pages, r.CrossLinks, r.Edges, r.DurationMs, now.UnixMilli(), id)

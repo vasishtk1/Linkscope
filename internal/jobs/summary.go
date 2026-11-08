@@ -33,6 +33,8 @@ type FailedJob struct {
 type FinishedJob struct {
 	ID         int64     `json:"id"`
 	Path       string    `json:"path"`
+	Worker     string    `json:"worker"`
+	Attempt    int       `json:"attempt"`
 	Pages      int       `json:"pages"`
 	Edges      int       `json:"edges"`
 	DurationMs int64     `json:"durationMs"`
@@ -124,9 +126,19 @@ func (s *Store) failures() ([]FailedJob, error) {
 }
 
 func (s *Store) recent(limit int) ([]FinishedJob, error) {
+	return s.finished("DESC", limit)
+}
+
+// Finished lists every done job in the order they finished, for the dashboard's timeline.
+func (s *Store) Finished() ([]FinishedJob, error) {
+	return s.finished("ASC", -1)
+}
+
+// finished lists done jobs by finish time; a limit of -1 means all of them.
+func (s *Store) finished(order string, limit int) ([]FinishedJob, error) {
 	rows, err := s.db.Query(`
-		SELECT id, path, pages, edges, duration_ms, finished_at FROM jobs
-		WHERE state = 'done' ORDER BY finished_at DESC, id DESC LIMIT ?`, limit)
+		SELECT id, path, worker, attempt, pages, edges, duration_ms, finished_at FROM jobs
+		WHERE state = 'done' ORDER BY finished_at `+order+`, id `+order+` LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -135,11 +147,35 @@ func (s *Store) recent(limit int) ([]FinishedJob, error) {
 	for rows.Next() {
 		var f FinishedJob
 		var finished int64
-		if err := rows.Scan(&f.ID, &f.Path, &f.Pages, &f.Edges, &f.DurationMs, &finished); err != nil {
+		if err := rows.Scan(&f.ID, &f.Path, &f.Worker, &f.Attempt, &f.Pages, &f.Edges, &f.DurationMs, &finished); err != nil {
 			return nil, err
 		}
 		f.FinishedAt = time.UnixMilli(finished)
 		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+type WorkerTotals struct {
+	Done  int
+	Pages int64
+}
+
+// ByWorker counts finished jobs and pages for each worker that finished something.
+func (s *Store) ByWorker() (map[string]WorkerTotals, error) {
+	rows, err := s.db.Query(`SELECT worker, COUNT(*), SUM(pages) FROM jobs WHERE state = 'done' GROUP BY worker`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]WorkerTotals{}
+	for rows.Next() {
+		var name string
+		var t WorkerTotals
+		if err := rows.Scan(&name, &t.Done, &t.Pages); err != nil {
+			return nil, err
+		}
+		out[name] = t
 	}
 	return out, rows.Err()
 }

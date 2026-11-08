@@ -3,6 +3,7 @@ package jobs
 import (
 	"errors"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -261,5 +262,32 @@ func TestSummaryLists(t *testing.T) {
 	}
 	if len(sum.Recent) != 1 || sum.Recent[0].Path != "a" {
 		t.Fatalf("recent = %+v", sum.Recent)
+	}
+}
+
+func TestFinishedKeepsWorkerAndOrder(t *testing.T) {
+	s := open(t, 1)
+	s.Add([]string{"a", "b", "c"})
+	a := mustClaim(t, s, "w1", t0)
+	b := mustClaim(t, s, "w2", t0)
+	c := mustClaim(t, s, "w1", t0)
+	s.Complete(b.ID, Result{Pages: 4, DurationMs: 50}, t0.Add(time.Second))
+	s.Complete(a.ID, Result{Pages: 3, DurationMs: 90}, t0.Add(2*time.Second))
+	_ = c
+
+	fin, err := s.Finished()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fin) != 2 || fin[0].Path != "b" || fin[0].Worker != "w2" || fin[1].Path != "a" || fin[1].Worker != "w1" || fin[1].Attempt != 1 {
+		t.Fatalf("finished = %+v", fin)
+	}
+	by, err := s.ByWorker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]WorkerTotals{"w1": {Done: 1, Pages: 3}, "w2": {Done: 1, Pages: 4}}
+	if !reflect.DeepEqual(by, want) {
+		t.Fatalf("by worker = %+v, want %+v", by, want)
 	}
 }

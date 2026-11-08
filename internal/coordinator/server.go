@@ -6,7 +6,9 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,11 +26,41 @@ type Server struct {
 	started    time.Time
 	firstDone  int
 	firstPages int64
+	seen       map[string]*seenWorker
+}
+
+// seenWorker is what the coordinator remembers about a worker from its requests; it's lost on restart.
+type seenWorker struct {
+	last     time.Time
+	jobID    int64
+	path     string
+	since    time.Time
+	finished bool
 }
 
 func New(store *jobs.Store, lease time.Duration) *Server {
-	return &Server{store: store, lease: lease, now: time.Now, logf: log.Printf}
+	return &Server{store: store, lease: lease, now: time.Now, logf: log.Printf, seen: map[string]*seenWorker{}}
 }
+
+// saw records a request from a worker; update changes what it's doing.
+func (s *Server) saw(name string, update func(*seenWorker)) {
+	if name == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w := s.seen[name]
+	if w == nil {
+		w = &seenWorker{}
+		s.seen[name] = w
+	}
+	w.last = s.now()
+	if update != nil {
+		update(w)
+	}
+}
+
+func idle(w *seenWorker) { w.jobID, w.path = 0, "" }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -38,6 +70,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /jobs/{id}/fail", s.fail)
 	mux.HandleFunc("POST /jobs/{id}/release", s.release)
 	mux.HandleFunc("GET /status", s.status)
+	mux.HandleFunc("GET /timeline", s.timeline)
 	return mux
 }
 
@@ -75,9 +108,11 @@ func (s *Server) claim(w http.ResponseWriter, r *http.Request) {
 			s.internal(w, err)
 			return
 		}
+		s.saw(req.Worker, func(sw *seenWorker) { idle(sw); sw.finished = sum.Finished() })
 		writeJSON(w, http.StatusOK, api.ClaimResponse{Finished: sum.Finished()})
 		return
 	}
+	s.saw(req.Worker, func(sw *seenWorker) { sw.jobID, sw.path, sw.since, sw.finished = j.ID, j.Path, s.now(), false })
 	s.logf("job %d (attempt %d) -> %s", j.ID, j.Attempt, req.Worker)
 	writeJSON(w, http.StatusOK, api.ClaimResponse{Job: &api.Job{
 		ID: j.ID, Path: j.Path, Attempt: j.Attempt, LeaseSeconds: s.lease.Seconds(),
@@ -90,6 +125,7 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 	if !ok || !decode(w, r, &req) {
 		return
 	}
+	s.saw(req.Worker, nil)
 	s.leaseResult(w, s.store.Heartbeat(id, req.Attempt, s.lease, s.now()))
 }
 
@@ -103,6 +139,7 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		s.internal(w, err)
 		return
 	}
+	s.saw(req.Worker, idle)
 	s.logf("job %d done by %s: %d pages, %d edges in %dms", id, req.Worker, req.Result.Pages, req.Result.Edges, req.Result.DurationMs)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -114,6 +151,7 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := s.store.Fail(id, req.Attempt, req.Error)
+	s.saw(req.Worker, idle)
 	if err == nil {
 		s.logf("job %d attempt %d failed on %s: %s", id, req.Attempt, req.Worker, req.Error)
 	}
@@ -127,6 +165,7 @@ func (s *Server) release(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := s.store.Release(id, req.Attempt)
+	s.saw(req.Worker, idle)
 	if err == nil {
 		s.logf("job %d released by %s", id, req.Worker)
 	}
@@ -149,6 +188,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	st := api.Status{
 		Summary: sum,
 		Total:   sum.Pending + sum.Running + sum.Done + sum.Failed,
+		Now:     now,
 	}
 	if !started.IsZero() {
 		uptime := now.Sub(started)
@@ -159,7 +199,52 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 			st.PagesPerSecond = float64(pagesSince) / uptime.Seconds()
 		}
 	}
+	if st.Workers, err = s.workers(now); err != nil {
+		s.internal(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, st)
+}
+
+// workers merges the workers seen since startup with every worker that finished a job in the database.
+func (s *Server) workers(now time.Time) ([]api.Worker, error) {
+	totals, err := s.store.ByWorker()
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []api.Worker{}
+	for name, sw := range s.seen {
+		w := api.Worker{Name: name, LastSeenSeconds: now.Sub(sw.last).Seconds(), Done: totals[name].Done, Pages: totals[name].Pages}
+		switch {
+		case sw.finished:
+			w.State = "finished"
+		case now.Sub(sw.last) > s.lease:
+			w.State = "gone"
+		case sw.jobID != 0:
+			w.State, w.JobID, w.Path, w.JobSeconds = "working", sw.jobID, sw.path, now.Sub(sw.since).Seconds()
+		default:
+			w.State = "idle"
+		}
+		out = append(out, w)
+	}
+	for name, t := range totals {
+		if _, ok := s.seen[name]; !ok && name != "" {
+			out = append(out, api.Worker{Name: name, State: "offline", LastSeenSeconds: -1, Done: t.Done, Pages: t.Pages})
+		}
+	}
+	slices.SortFunc(out, func(a, b api.Worker) int { return strings.Compare(a.Name, b.Name) })
+	return out, nil
+}
+
+func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
+	fin, err := s.store.Finished()
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, api.Timeline{Jobs: fin})
 }
 
 // MarkStarted sets the starting point for throughput; status shows no rates until it's called.

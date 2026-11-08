@@ -24,7 +24,7 @@ The coordinator's job list, stored in SQLite. One row per Common Crawl file. Thi
 | `path` | Common Crawl path of the WAT file (unique) |
 | `state` | `pending`, `running`, `done`, or `failed` |
 | `attempt` | How many times the job has been handed out |
-| `worker` | Who holds it right now (empty unless running) |
+| `worker` | Who holds it right now. Kept after the job is done, so the dashboard can show who did which file. Cleared when a job goes back in line |
 | `lease_expires` | When the current lease runs out (Unix ms) |
 | `last_error` | Why the last attempt failed |
 | `pages`, `cross_links`, `edges`, `duration_ms`, `finished_at` | Results reported on completion |
@@ -102,6 +102,8 @@ Extends the lease to `now + lease`. Only succeeds if the job is still running, s
 
 Marks the job done and saves the results. **Accepted from any attempt**, even a stale one, as long as the job isn't already done. Completing twice changes nothing.
 
+The `worker` column is left as it is, so a finished job remembers which worker held it last. That's almost always the worker that finished it. The rare exception is a stale worker finishing after its lease moved to someone else; the job is then credited to the new holder.
+
 **Why stale completions are accepted:** the result file is the same no matter which worker produced it, since extraction is deterministic and the file is replaced atomically. So if an old worker finishes first, its result is just as good, and the job is done sooner.
 
 ### `(*Store) Fail(id int64, attempt int, msg string) error`
@@ -128,7 +130,7 @@ Snapshot for the status page: counts per state, totals of pages/links/edges from
 
 ### `ActiveJob`, `FailedJob`, `FinishedJob`
 
-The rows in those lists.
+The rows in those lists. `FinishedJob` also has `Worker` and `Attempt`, so the dashboard can draw each file on its worker's row of the timeline and spot retries. Its start time is `FinishedAt − DurationMs`, so no separate start column is needed.
 
 ### `(Summary) Finished() bool`
 
@@ -140,4 +142,16 @@ Builds the snapshot: one `GROUP BY state` count, one `SUM` over finished jobs, t
 
 ### `active()`, `failures()`, `recent(limit)` (unexported)
 
-The queries behind the three lists.
+The queries behind the three lists. `recent` is `finished("DESC", limit)`, newest first.
+
+### `(*Store) Finished() ([]FinishedJob, error)`
+
+Every done job, in the order they finished. This feeds the coordinator's `/timeline` route, which the dashboard uses for its timeline and its pages-over-time chart.
+
+### `finished(order string, limit int)` (unexported)
+
+The shared query for `recent` and `Finished`. `order` is only ever the constant `"ASC"` or `"DESC"` from this file, never user input, so building it into the SQL is safe. A `limit` of `-1` means no limit in SQLite.
+
+### `WorkerTotals`, `(*Store) ByWorker() (map[string]WorkerTotals, error)`
+
+Finished jobs and pages per worker, from one `GROUP BY worker` over done jobs. It reads from the database, so the counts survive a coordinator restart.

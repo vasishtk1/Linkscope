@@ -165,3 +165,82 @@ func TestReadPathsAndWindow(t *testing.T) {
 		t.Fatalf("url = %s", u)
 	}
 }
+
+func getJSON(t *testing.T, url string, into any) {
+	t.Helper()
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("%s: status %d", url, resp.StatusCode)
+	}
+	json.NewDecoder(resp.Body).Decode(into)
+}
+
+func TestStatusShowsWorkers(t *testing.T) {
+	_, hs, now := newServer(t, "a", "b")
+	claim(t, hs.URL, "w1")
+	claim(t, hs.URL, "w2")
+	*now = now.Add(10 * time.Second)
+	post(t, hs.URL+"/jobs/1/complete", api.CompleteRequest{Worker: "w1", Attempt: 1, Result: jobs.Result{Pages: 7}})
+	claim(t, hs.URL, "w3")
+	*now = now.Add(5 * time.Second)
+
+	var st api.Status
+	getJSON(t, hs.URL+"/status", &st)
+	want := []api.Worker{
+		{Name: "w1", State: "idle", LastSeenSeconds: 5, Done: 1, Pages: 7},
+		{Name: "w2", State: "working", JobID: 2, Path: "b", JobSeconds: 15, LastSeenSeconds: 15},
+		{Name: "w3", State: "idle", LastSeenSeconds: 5},
+	}
+	if !st.Now.Equal(*now) {
+		t.Fatalf("now = %v, want %v", st.Now, *now)
+	}
+	if !reflect.DeepEqual(st.Workers, want) {
+		t.Fatalf("workers = %+v\nwant      %+v", st.Workers, want)
+	}
+
+	// w2 stops talking: after a lease with no word it's shown as gone.
+	*now = now.Add(2 * time.Minute)
+	getJSON(t, hs.URL+"/status", &st)
+	if st.Workers[1].State != "gone" {
+		t.Fatalf("w2 = %+v, want gone", st.Workers[1])
+	}
+}
+
+func TestFinishedWorkerAndRestart(t *testing.T) {
+	s, hs, _ := newServer(t, "a")
+	claim(t, hs.URL, "w1")
+	post(t, hs.URL+"/jobs/1/complete", api.CompleteRequest{Worker: "w1", Attempt: 1, Result: jobs.Result{Pages: 2}})
+	claim(t, hs.URL, "w1")
+
+	var st api.Status
+	getJSON(t, hs.URL+"/status", &st)
+	if len(st.Workers) != 1 || st.Workers[0].State != "finished" {
+		t.Fatalf("workers = %+v", st.Workers)
+	}
+
+	// A restarted coordinator hasn't seen anyone yet, but still lists who did the work.
+	s.seen = map[string]*seenWorker{}
+	getJSON(t, hs.URL+"/status", &st)
+	if len(st.Workers) != 1 || st.Workers[0] != (api.Worker{Name: "w1", State: "offline", LastSeenSeconds: -1, Done: 1, Pages: 2}) {
+		t.Fatalf("workers = %+v", st.Workers)
+	}
+}
+
+func TestTimeline(t *testing.T) {
+	_, hs, now := newServer(t, "a", "b")
+	claim(t, hs.URL, "w1")
+	claim(t, hs.URL, "w2")
+	post(t, hs.URL+"/jobs/2/complete", api.CompleteRequest{Worker: "w2", Attempt: 1, Result: jobs.Result{Pages: 3, DurationMs: 400}})
+	*now = now.Add(time.Second)
+	post(t, hs.URL+"/jobs/1/complete", api.CompleteRequest{Worker: "w1", Attempt: 1, Result: jobs.Result{Pages: 5, DurationMs: 900}})
+
+	var tl api.Timeline
+	getJSON(t, hs.URL+"/timeline", &tl)
+	if len(tl.Jobs) != 2 || tl.Jobs[0].Path != "b" || tl.Jobs[0].Worker != "w2" || tl.Jobs[1].Path != "a" || tl.Jobs[1].DurationMs != 900 {
+		t.Fatalf("timeline = %+v", tl.Jobs)
+	}
+}
