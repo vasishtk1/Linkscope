@@ -91,7 +91,7 @@ A full-screen canvas behind the landing page that slowly flies forward through t
 - **Size:** bigger scores get slightly bigger icons (0.7× to 1.3×).
 - **Lines:** a link is drawn between two sites when either one is on screen, at most 35% as bright as the fainter end.
 - **Drawing order:** far sites first, so close ones cover them. Tiny far sites (under 6px) are plain dots, which skips the costly clipped image.
-- **Mouse:** moving the pointer shifts the camera a little, and it eases toward the new spot. Close sites move more than far ones (parallax), which makes the depth easier to see.
+- **No mouse effect:** the flight ignores the pointer and just keeps moving at the same pace.
 
 **Keeping it light on the laptop:**
 

@@ -56,15 +56,9 @@ export function NetworkBackground() {
     const icons = new Map<string, HTMLImageElement | null>();
     const dust: Point[] = [];
 
-    const cam = { x: 0, y: 0, tx: 0, ty: 0 };
-    const onPointer = (e: PointerEvent) => {
-      cam.tx = (e.clientX / w - 0.5) * 0.5;
-      cam.ty = (e.clientY / h - 0.5) * 0.5;
-    };
-
     const project = (p: Point, focal: number) => ({
-      sx: w / 2 + ((p.x - cam.x) / p.z) * focal,
-      sy: h / 2 + ((p.y - cam.y) / p.z) * focal,
+      sx: w / 2 + (p.x / p.z) * focal,
+      sy: h / 2 + (p.y / p.z) * focal,
     });
     // depthAlpha fades points in from the distance and out just before they reach the camera.
     const depthAlpha = (z: number) => clamp((FAR - z) / 1.2) * clamp((z - NEAR) / 0.5);
@@ -148,8 +142,6 @@ export function NetworkBackground() {
     }
 
     function step(dt: number) {
-      cam.x += (cam.tx - cam.x) * Math.min(1, dt * 3);
-      cam.y += (cam.ty - cam.y) * Math.min(1, dt * 3);
       const dz = SPEED * dt;
       for (const s of sites) {
         s.z -= dz;
@@ -212,7 +204,6 @@ export function NetworkBackground() {
       .catch(() => {});
 
     window.addEventListener("resize", resize);
-    window.addEventListener("pointermove", onPointer);
     document.addEventListener("visibilitychange", onVisibility);
     if (still) draw();
     play();
@@ -221,7 +212,6 @@ export function NetworkBackground() {
       ctrl.abort();
       pause();
       window.removeEventListener("resize", resize);
-      window.removeEventListener("pointermove", onPointer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
