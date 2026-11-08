@@ -9,6 +9,7 @@ import { LinkGraph } from "./link-graph";
 import { StatCards } from "./stat-cards";
 import { BacklinksTable } from "./backlinks-table";
 import { DownloadCsv } from "./download-csv";
+import { NetworkBackground } from "./network-background";
 
 type Outcome = { kind: "found"; data: Lookup } | { kind: "missing" } | { kind: "error" };
 type State = { kind: "idle" } | { kind: "loading" } | Outcome;
@@ -48,6 +49,18 @@ export function Linkscope() {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
+      <AnimatePresence>
+        {!hasResult && (
+          <motion.div
+            key="network"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { duration: 1.2 } }}
+            exit={{ opacity: 0, transition: { duration: 0.4 } }}
+          >
+            <NetworkBackground />
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 h-[600px] bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.12),transparent_60%)]"

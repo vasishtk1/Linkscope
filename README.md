@@ -97,8 +97,8 @@ Linkscope/
 │   ├── roadmap.md             # build stages and progress
 │   └── reference/             # function-by-function reference, one file per package
 ├── web/                       # Next.js website
-│   ├── app/                   # pages and API routes (lookup, CSV download, favicons)
-│   ├── components/            # search bar, animated link graph, stats, backlinks table
+│   ├── app/                   # pages and API routes (lookup, network, CSV download, favicons)
+│   ├── components/            # search bar, animated link graph, network background, stats, backlinks table
 │   └── lib/                   # calls the Go lookup API, shared types, badge colors
 ├── .dockerignore              # keeps data/ and docs out of the Docker build
 ├── Dockerfile                 # builds all binaries into one small image

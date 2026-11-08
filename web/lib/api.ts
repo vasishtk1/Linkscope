@@ -1,5 +1,5 @@
 import "server-only";
-import type { Lookup } from "./types";
+import type { Lookup, Network } from "./types";
 
 const API = process.env.LINKSCOPE_API ?? "http://localhost:8081";
 
@@ -28,4 +28,10 @@ export async function isKnownDomain(domain: string): Promise<boolean> {
   if (!domain) return false;
   const res = await call(`/known?domain=${encodeURIComponent(domain)}`);
   return res.ok;
+}
+
+export async function network(n: number): Promise<Network> {
+  const res = await call(`/network?n=${n}`);
+  if (!res.ok) throw new ApiUnavailable(`lookup API returned ${res.status}`);
+  return res.json();
 }

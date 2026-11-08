@@ -17,7 +17,7 @@ cd web && LINKSCOPE_API=http://localhost:8082 npm run dev
 
 ## Page flow
 
-1. **Landing:** name, description, and the search box in the middle of the screen, plus example sites to try.
+1. **Landing:** name, description, and the search box in the middle of the screen, plus example sites to try. Behind them, the top sites in the index drift toward you with their real icons and the links between them (`NetworkBackground`).
 2. **Search:** the URL becomes `/?d=<site>`, so results can be shared and the back button works. The header moves up and the graph builds.
 3. **Scroll down:** stats cards and the backlinks table.
 4. **Bottom:** "Download backlinks CSV".
@@ -47,6 +47,10 @@ Fetches a site's `/favicon.ico` (then `www.` host), 3s limit each, and caches th
 - **Only domains from our own data** are fetched. Otherwise anyone could use the server to make requests to arbitrary hosts.
 - **Why not Google's favicon service:** it would tell Google every site users look up.
 
+### `api/network/route.ts` — `GET /api/network`
+
+The top 60 sites and the links among them, from the Go API's `/network?n=60`, for the landing page background. Browsers may cache it for an hour (`Cache-Control: public, max-age=3600`), since it only changes when the index is rebuilt. `503` if the Go API can't be reached; the background then shows only its drifting dots.
+
 ## lib/
 
 ### `api.ts`
@@ -56,11 +60,12 @@ Talks to the Go lookup API at `LINKSCOPE_API` (default `http://localhost:8081`).
 - **`call(path)`** fetches from the API with no caching and a 10s limit. If the API can't be reached it throws `ApiUnavailable`, which the lookup route turns into a `503`.
 - **`lookup(input, limit = PAGE_LIMIT)`** passes the user's text straight to `GET /lookup`. The Go API does the cleanup (scheme, `www.`, subdomains), so the rules live in one place. Returns `undefined` on `404`.
 - **`isKnownDomain(domain)`** asks `GET /known`, for the favicon route.
+- **`network(n)`** asks `GET /network?n=`, for the background.
 - **`PAGE_LIMIT` (1,000):** on the 20-file data, facebook.com's full backlink list is 17.7 MB of JSON, too much to send to a browser. The top 1,000 is more than the graph can show legibly. The CSV route passes `0` to get all of them.
 
 ### `types.ts`
 
-`Backlink` and `Lookup`, the shapes the API returns.
+`Backlink`, `Lookup` and `Network`, the shapes the API returns.
 
 ### `badge.ts`
 
@@ -72,6 +77,33 @@ Talks to the Go lookup API at `LINKSCOPE_API` (default `http://localhost:8081`).
 ### `linkscope.tsx` — `Linkscope`
 
 The page. Reads `?d=` from the URL and fetches `/api/lookup`. The page state (idle, loading, found, missing, error) is derived from the URL plus the last answer, rather than stored separately, so it can never fall out of sync with the address bar. Old requests are cancelled with an `AbortController` when the search changes.
+
+It shows `NetworkBackground` only while there's no search, inside `AnimatePresence`: it fades in over 1.2s and fades out in 0.4s when a search starts. Unmounting it stops its animation loop completely, so it costs nothing while you look at results.
+
+### `network-background.tsx` — `NetworkBackground`
+
+A full-screen canvas behind the landing page that slowly flies forward through the network we measured: the 60 top-scored sites with their favicons (or letter badges) and the links between them, plus 140 small dots for a sense of depth.
+
+**How the 3D works, without a 3D library:** every site has a position `x, y` and a depth `z` (0.35 to 5). Each frame `z` shrinks a little, which is the camera moving forward. A point is drawn at `center + (x / z) × focal`, with a radius of `size × focal × 0.045 / z`. Dividing by `z` is the whole perspective trick: far things are small and close to the middle, and as `z` gets smaller they grow and slide outward. A site that passes the camera or leaves the screen moves back to the far end at a new random spot, so the flight never ends.
+
+- **`place`** puts points on a ring around the middle (never right in front of the camera), so sites fly past the search box instead of through it. The ring is stretched by the screen's width-to-height ratio to fill wide screens.
+- **Fading:** `depthAlpha` fades points in from the distance and out just before the camera. `centerAlpha` dims everything near the middle of the screen, so the title and search box stay readable.
+- **Size:** bigger scores get slightly bigger icons (0.7× to 1.3×).
+- **Lines:** a link is drawn between two sites when either one is on screen, at most 35% as bright as the fainter end.
+- **Drawing order:** far sites first, so close ones cover them. Tiny far sites (under 6px) are plain dots, which skips the costly clipped image.
+- **Mouse:** moving the pointer shifts the camera a little, and it eases toward the new spot. Close sites move more than far ones (parallax), which makes the depth easier to see.
+
+**Keeping it light on the laptop:**
+
+| Guard | What it does |
+|---|---|
+| 30 frames per second | Frames that come sooner are skipped; that's smooth for slow movement and about half the work of 60 |
+| Pixel ratio capped at 1.5 | Retina screens would otherwise draw 4× the pixels |
+| Hidden tab | The loop stops on `visibilitychange` and restarts when you come back |
+| Reduced motion | If the system asks for less motion, one still frame is drawn (and redrawn as icons arrive), with no loop at all |
+| After a search | The component is unmounted, so nothing runs |
+
+Icons come through `/api/favicon`, the same cached route the graph uses, so only sites from our own data are fetched.
 
 ### `search-bar.tsx` — `SearchBar`
 

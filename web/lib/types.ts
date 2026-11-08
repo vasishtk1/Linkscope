@@ -15,3 +15,8 @@ export type Lookup = {
   backlinks: Backlink[];
   source: string;
 };
+
+export type Network = {
+  nodes: { domain: string; score: number }[];
+  links: { source: string; target: string; pages: number }[];
+};
