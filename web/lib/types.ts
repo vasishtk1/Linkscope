@@ -34,15 +34,20 @@ export type PipelineWorker = {
   pages: number;
 };
 
-export type FinishedJob = {
+export type RunEvent = {
   id: number;
+  at: string;
+  job: number;
   path: string;
   worker: string;
+  kind: "claimed" | "completed" | "failed" | "expired" | "released";
   attempt: number;
-  pages: number;
-  edges: number;
-  durationMs: number;
-  finishedAt: string;
+  final?: boolean;
+  pages?: number;
+  crossLinks?: number;
+  edges?: number;
+  durationMs?: number;
+  error?: string;
 };
 
 export type PipelineStatus = {
@@ -51,15 +56,20 @@ export type PipelineStatus = {
   done: number;
   failed: number;
   total: number;
-  pages: number;
-  crossLinks: number;
-  edges: number;
-  uptimeSeconds: number;
-  jobsPerMinute: number;
-  pagesPerSecond: number;
-  failures: { id: number; path: string; attempts: number; error: string }[];
   workers: PipelineWorker[];
   now: string;
 };
 
-export type Pipeline = { status: PipelineStatus; jobs: FinishedJob[] };
+// Pipeline is the live coordinator: its status and its whole event log.
+export type Pipeline = { status: PipelineStatus; events: RunEvent[] };
+
+// Recording is a saved run from cmd/record.
+export type Recording = {
+  name: string;
+  recordedAt: string;
+  derived: boolean;
+  files: { id: number; path: string; state: string; attempts: number; pages: number; crossLinks: number; edges: number }[];
+  workers: string[];
+  events: RunEvent[];
+  totals: { files: number; done: number; failed: number; pages: number; crossLinks: number; edges: number; failedAttempts: number; seconds: number };
+};

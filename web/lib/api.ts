@@ -1,5 +1,5 @@
 import "server-only";
-import type { Lookup, Network } from "./types";
+import type { Lookup, Network, Recording } from "./types";
 
 const API = process.env.LINKSCOPE_API ?? "http://localhost:8081";
 
@@ -32,6 +32,14 @@ export async function isKnownDomain(domain: string): Promise<boolean> {
 
 export async function network(n: number): Promise<Network> {
   const res = await call(`/network?n=${n}`);
+  if (!res.ok) throw new ApiUnavailable(`lookup API returned ${res.status}`);
+  return res.json();
+}
+
+// savedRun returns the recording the API was started with, or undefined if it has none.
+export async function savedRun(): Promise<Recording | undefined> {
+  const res = await call("/run");
+  if (res.status === 404) return undefined;
   if (!res.ok) throw new ApiUnavailable(`lookup API returned ${res.status}`);
   return res.json();
 }

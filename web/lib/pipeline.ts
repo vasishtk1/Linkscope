@@ -1,5 +1,5 @@
 import "server-only";
-import type { FinishedJob, Pipeline, PipelineStatus } from "./types";
+import type { Pipeline, PipelineStatus, RunEvent } from "./types";
 
 const COORDINATOR = process.env.LINKSCOPE_COORDINATOR ?? "http://localhost:8080";
 
@@ -16,11 +16,11 @@ async function get<T>(path: string): Promise<T> {
   return res.json();
 }
 
-// pipeline asks the coordinator for its live status and every finished job, in parallel.
+// pipeline asks the coordinator for its live status and its event log, in parallel.
 export async function pipeline(): Promise<Pipeline> {
-  const [status, timeline] = await Promise.all([
+  const [status, log] = await Promise.all([
     get<PipelineStatus>("/status"),
-    get<{ jobs: FinishedJob[] }>("/timeline"),
+    get<{ events: RunEvent[] }>("/events"),
   ]);
-  return { status, jobs: timeline.jobs };
+  return { status, events: log.events };
 }

@@ -22,7 +22,7 @@ cd web && LINKSCOPE_API=http://localhost:8082 npm run dev
 3. **Scroll down:** stats cards and the backlinks table.
 4. **Bottom:** "Download backlinks CSV".
 
-The **Pipeline** link in the header opens `/pipeline`, a live dashboard of the coordinator and workers while a run is going (see `pipeline.tsx` below).
+The **Pipeline** link in the header opens `/pipeline`: press Play to watch a real pipeline run replayed, or watch one live while it's happening (see `pipeline.tsx` below).
 
 ## app/
 
@@ -55,11 +55,15 @@ The top 60 sites and the links among them, from the Go API's `/network?n=60`, fo
 
 ### `api/pipeline/route.ts` — `GET /api/pipeline`
 
-The coordinator's `/status` and `/timeline` combined into one answer, `{status, jobs}`, so the dashboard makes one request per update. `503` when no coordinator answers.
+The live coordinator: its `/status` and its whole `/events` log, combined into `{status, events}` so the page makes one request per update. `503` when no coordinator answers.
+
+### `api/run/route.ts` — `GET /api/run`
+
+The saved run the Go API was started with (`cmd/api -run`, see [record.md](record.md)). `404` if there isn't one, `503` if the API is down.
 
 ### `pipeline/page.tsx`
 
-The `/pipeline` page: the shared header (with "Pipeline" marked as the current page), the same blue glow as the home page, and the `Pipeline` component. It doesn't use the animated network background, which would compete with the charts and cost CPU on a page that's already updating every second.
+The `/pipeline` page: the shared header (with "Pipeline" marked as the current page), the same blue glow as the home page, and the `Pipeline` component. It doesn't use the animated network background, which would compete with the pipeline animation.
 
 ## lib/
 
@@ -71,19 +75,30 @@ Talks to the Go lookup API at `LINKSCOPE_API` (default `http://localhost:8081`).
 - **`lookup(input, limit = PAGE_LIMIT)`** passes the user's text straight to `GET /lookup`. The Go API does the cleanup (scheme, `www.`, subdomains), so the rules live in one place. Returns `undefined` on `404`.
 - **`isKnownDomain(domain)`** asks `GET /known`, for the favicon route.
 - **`network(n)`** asks `GET /network?n=`, for the background.
+- **`savedRun()`** asks `GET /run`; `undefined` when there's no saved run.
 - **`PAGE_LIMIT` (1,000):** on the 20-file data, facebook.com's full backlink list is 17.7 MB of JSON, too much to send to a browser. The top 1,000 is more than the graph can show legibly. The CSV route passes `0` to get all of them.
 
 ### `pipeline.ts`
 
 Talks to the coordinator at `LINKSCOPE_COORDINATOR` (default `http://localhost:8080`). Also `server-only`.
 
-- **`pipeline()`** fetches `/status` and `/timeline` at the same time (`Promise.all`) and returns both.
+- **`pipeline()`** fetches `/status` and `/events` at the same time (`Promise.all`) and returns both.
 - **3s limit, not 10s:** the dashboard asks every second, so a coordinator that isn't there should fail fast and show "No pipeline is running" instead of hanging.
 - Throws `CoordinatorUnavailable` when the coordinator can't be reached or answers with an error.
 
 ### `types.ts`
 
-`Backlink`, `Lookup` and `Network`, the shapes the lookup API returns. `PipelineStatus`, `PipelineWorker`, `FinishedJob` and `Pipeline` match the coordinator's JSON.
+`Backlink`, `Lookup` and `Network`, the shapes the lookup API returns. `PipelineStatus`, `PipelineWorker`, `RunEvent` and `Pipeline` match the coordinator's JSON, and `Recording` matches `cmd/record`'s file.
+
+### `replay.ts`
+
+The replay engine. Plain functions with no React, so the same code drives both the replay and the live view.
+
+- **`makeRun(opts)`** prepares a run: puts every event on one clock (milliseconds), sorts them, and works out, for every claim, when that attempt ended (`closeAt`) and how (`segments`: done, failed, or still open). It also takes the median time a file took (`typicalMs`), used to estimate progress in live mode. `total` is the number of files, `start` and `end` the first and last event (or the coordinator's `now` for a live run).
+- **`frameAt(run, t, flightMs)`** answers "what did the pipeline look like at time `t`?" by replaying every event up to `t`: which file each worker holds and how far along it is, which workers went silent ("no contact"), how many files are done, failed or still waiting, and the running totals of pages, links and failed attempts. Events in the last `flightMs` also become **flights**, file tiles moving coordinator → worker (claimed), worker → merge (completed) or worker → queue (failed, expired, released).
+- **Why compute each frame from scratch:** the state at any time depends only on the events before it, so the slider can jump anywhere, backwards included, and always shows exactly what happened. Replaying a few hundred events 30 times a second is cheap.
+- **Progress bars:** in a replay the end of each attempt is known, so a worker's bar is exact. While live, the end isn't known yet, so the bar estimates from the median file time and stops at 95% until the file actually finishes.
+- **`fileLabel`, `fmt`, `clock`:** short file names, numbers with commas, and `m:ss` times.
 
 ### `badge.ts`
 
@@ -129,25 +144,36 @@ Icons come through `/api/favicon`, the same cached route the graph uses, so only
 
 ### `pipeline.tsx` — `Pipeline`
 
-The live pipeline dashboard. Top to bottom:
+The pipeline page. It picks what to show, in this order:
+
+1. **A live run**, if the coordinator says files are still waiting or being processed. The scene follows it in real time.
+2. **The run on the coordinator**, once a live run you were watching finishes, so it doesn't jump away. It can be replayed like a saved one.
+3. **The saved run** from `/api/run`. This is what visitors to a hosted site see.
+4. Otherwise, how to make one: `make demo`, `make record`, `make web`.
+
+When both a saved run and a finished coordinator run exist, a switch above the scene picks between them.
+
+- **`useLive`** polls `/api/pipeline` every second, or every 4 seconds while no coordinator answers, so a new run appears on its own. It stops while the tab is hidden, never lets two requests overlap, and remembers if it ever saw a run in progress.
+- **`useRecording`** fetches the saved run once.
+- **`Replay`** holds the replay clock `t`. **Play** moves it forward 30 times a second; **Pause** stops the animation loop completely, so a paused page does no work. The page opens paused at the start with a big Play button over the scene. Speeds: *Fit to 30s* (the default, so a 3-second demo and a 2-minute run both take 30s), 1×, 10× and 60×. File tiles take 0.7s of screen time to move, whatever the speed. Hiding the tab pauses it.
+- **`LiveView`** shows a run as it happens. The coordinator's clock comes with each update; between updates the page moves it forward with the browser's timer, so tiles glide instead of jumping once a second.
+- **`Scrubber`** is the slider: one thin row per worker and one bar per file attempt (blue processed, red failed), with the playhead on top. Click or drag to jump; arrow keys step by 2%.
+- **`Counters`** below the scene: files done, pages read, links found, site pairs (per file, before merging), and failed attempts (each one retried, or how many gave up).
+- **Derived runs:** a recording made from a database older than the event log says so, because its retries weren't recorded.
+
+### `pipeline-scene.tsx` — `PipelineScene`
+
+Draws one frame as SVG, left to right:
 
 | Part | Shows |
 |---|---|
-| Run badge | Running, Run finished, Waiting for jobs, or Disconnected |
-| Stat tiles | Files done of total, pages processed, links found, unique site pairs (summed per file, before merging), pages per second averaged over the run, and how long the run has taken |
-| Progress bar | Done, running, waiting and failed files, with counts in the key below so it's never color alone |
-| Workers | One card per worker: its state (dot plus word), the file it's on and for how long, and its totals |
-| Timeline | One row per worker and one bar per file, placed by when it started and finished. Running files pulse and grow; files that needed a retry get an amber outline. Hover a bar for its file, worker, time, pages and attempt |
-| Pages over time | A step line of total pages processed. It steps up each time a file finishes, because that's when its pages are counted. Hover for the total at that moment |
-| Failed files | Only shown when some failed: the file, its attempts and the last error |
-| Recently finished | The last 8 files with worker, pages, site pairs and time taken |
+| Common Crawl files | One small tile per waiting file (up to 72, then "+N more") |
+| Coordinator | The node that hands files out and retries failures |
+| Workers | One box per worker: its name, the file it's on, a progress bar, and its state (working, idle, retry with the attempt number, or "no contact" with a red border) |
+| Merge, PageRank, Index | Merge counts files as they arrive. PageRank and Index light up once every file is in, labeled as the steps that run next; their timings aren't in the recording, so no numbers are shown for them |
+| Flying tiles | Files moving between boxes along straight lines with ease-in-out; red when a failed file goes back to the queue |
 
-- **`usePipeline`** polls `/api/pipeline` every second, or every 3 seconds while no coordinator answers, so the page lights up on its own a few seconds after a run starts. It stops while the tab is hidden and resumes when you come back. A `busy` flag makes sure two requests never overlap, so a slow answer can't start a second polling chain. If the coordinator disappears mid-run, the last update stays on screen with a notice instead of going blank.
-- **`runShape`** puts every job on the coordinator's clock (`status.now`). A finished job runs from `finishedAt − durationMs` to `finishedAt`. A running job runs from `now − jobSeconds` to `now`. The run starts at the earliest start and ends at the last finish, or at `now` while it's still going. Using the coordinator's clock means the bars are right even if the browser's clock is off.
-- **Pages per second** is the run's pages divided by its length. It's not the coordinator's `pagesPerSecond`, which also counts any time the coordinator sat waiting before workers arrived.
-- **No chart library:** the timeline is positioned `div`s (left and width as percentages of the run), and the pages chart is one SVG path stretched to the box (`vector-effect: non-scaling-stroke` keeps the line 2px). Axis ticks pick a step (1s, 2s, 5s, … 2h) that gives at most about 6 labels.
-- **Colors:** one blue for work, gray for waiting, red only for failures (with an icon and words), green only for a finished run or worker.
-- **`NoPipeline`** is shown when nothing answers, with the two commands that start a run: `make demo` and `make up`.
+The SVG has a fixed 1000-wide coordinate system and scales to the page width. Its height grows with the number of workers.
 
 ### `search-bar.tsx` — `SearchBar`
 

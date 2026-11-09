@@ -4,7 +4,7 @@ Distributed backlink index and domain authority engine built on Common Crawl dat
 
 Type in a domain and see who links to it, an authority score, and an interactive graph of its connections. Linkscope processes Common Crawl's public web archive across a pool of workers, extracts every link between websites, and scores domains with PageRank.
 
-> **Status:** stages 0–2 and 4–6 of 7 done (distributed workers with crash and freeze recovery, merge, PageRank checked against Common Crawl's ranks, sharded index and lookup API, website with search, link graph and a live pipeline dashboard). See [docs/roadmap.md](docs/roadmap.md).
+> **Status:** stages 0–2 and 4–6 of 7 done (distributed workers with crash and freeze recovery, merge, PageRank checked against Common Crawl's ranks, sharded index and lookup API, website with search, link graph and a replayable, live pipeline view). See [docs/roadmap.md](docs/roadmap.md).
 
 ## How it works
 
@@ -100,9 +100,9 @@ Linkscope/
 │   ├── roadmap.md             # build stages and progress
 │   └── reference/             # function-by-function reference, one file per package
 ├── web/                       # Next.js website
-│   ├── app/                   # home and pipeline pages, API routes (lookup, network, pipeline, CSV, favicons)
-│   ├── components/            # search, link graph, network background, stats, table, pipeline dashboard
-│   └── lib/                   # calls the Go lookup API and the coordinator, shared types, badge colors
+│   ├── app/                   # home and pipeline pages, API routes (lookup, network, pipeline, run, CSV, favicons)
+│   ├── components/            # search, link graph, network background, stats, table, pipeline replay scene
+│   └── lib/                   # calls the lookup API and the coordinator, replay engine, shared types
 ├── .dockerignore              # keeps data/ and docs out of the Docker build
 ├── Dockerfile                 # builds all binaries into one small image
 ├── docker-compose.yml         # local cluster: 1 coordinator + N workers

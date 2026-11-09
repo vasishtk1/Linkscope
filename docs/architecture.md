@@ -159,18 +159,19 @@ The website's routes now call this API instead of reading data files. Pages get 
 
 Every domain with backlinks was looked up in the index and compared row by row with the edge file, and all of them matched.
 
-## Stage 6: pipeline dashboard
+## Stage 6: pipeline replay
 
 ```
-browser (/pipeline) ──every 1s──▶ website /api/pipeline ──▶ coordinator GET /status + GET /timeline ──▶ SQLite jobs table
+live:   browser (/pipeline) ──every 1s──▶ website /api/pipeline ──▶ coordinator GET /status + GET /events ──▶ SQLite (jobs, events)
+saved:  coordinator's jobs.db ──▶ cmd/record ──▶ data/run.json ──▶ cmd/api GET /run ──▶ website /api/run ──▶ Play
 ```
 
-The coordinator already knew everything about the run: the jobs table has each file's state, results and timing, and every worker request passes through it. The dashboard adds no new moving parts, only two read-only views:
+The `/pipeline` page shows a run as an animation: files handed from the coordinator to workers, processed side by side, retried when they fail, then collected for the merge. Anyone can press Play on a saved run, and a run that's happening right now is shown live.
 
-- **`/status` now lists workers.** The coordinator remembers in memory when it last heard from each worker and which file it's on. Workers already send claims and heartbeats, so this costs no extra requests. A worker silent for longer than a lease is shown as "No contact", the same rule the coordinator uses to hand its job to someone else.
-- **`/timeline`** returns every finished file with its worker and timing, from the jobs table. Finished jobs now keep their worker's name so each file can be drawn on its worker's row.
-
-Details: [coordinator.md](reference/coordinator.md), [web.md](reference/web.md).
+- **The event log** is the source of truth. The coordinator writes one row for every claim, completion, failure, expired lease and release, in the same transaction as the job change, so the history always matches the results. See [jobs.md](reference/jobs.md).
+- **A saved run** is that log plus the file list in one JSON file, made by `cmd/record` and served by the lookup API. A hosted site needs no pipeline running to show it, and every number in it was measured during the run. See [record.md](reference/record.md).
+- **The replay** computes each frame from the events before it ([web.md](reference/web.md), `replay.ts`), so pausing, speeding up and jumping around are all exact.
+- **Workers in `/status`:** the coordinator also remembers when it last heard from each worker and which file it's on. A worker silent for longer than a lease is shown as "no contact", the same rule the coordinator uses to give its file to someone else.
 
 ## Fault tolerance tests (stage 3)
 
