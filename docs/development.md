@@ -28,6 +28,7 @@
 | `make cc-ranks` | Saves Common Crawl's top 1,000,000 domains (`CC_TOP`) from their web graph (`CC_GRAPH`, default `cc-main-2026-aug-sep-oct`) to `data/cc-domain-ranks.tsv` |
 | `make validate` | Compares `data/scores.tsv` with `data/cc-domain-ranks.tsv` and prints how closely they agree |
 | `make demo` | A small local run to watch on the dashboard: serves `DEMO_FILES` (default 6) copies of the sample file from your own machine and starts a coordinator on :8080 with `DEMO_WORKERS` (default 3) workers using one parser each. Nothing is downloaded. Ctrl+C stops everything |
+| `make record` | Saves the finished run in `RUN_DB` (default `data/demo/jobs.db`) to `data/run.json` for the website's replay. `NAME="..."` sets its label. Restart the API (`make web`) to load it |
 | `make sample` | Downloads the first WAT file of the crawl in `CRAWL` (default `CC-MAIN-2026-43`) to `data/sample.warc.wat.gz` |
 
 ## Running a cluster without Docker

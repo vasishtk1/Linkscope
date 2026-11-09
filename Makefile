@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt up down clean sample sample-edges sample-scores sample-index web merge pagerank index api loadtest cc-ranks validate demo
+.PHONY: build test lint fmt up down clean sample sample-edges sample-scores sample-index web merge pagerank index api loadtest cc-ranks validate demo record
 
 build:
 	go build -o bin/ ./cmd/...
@@ -92,3 +92,8 @@ demo: build
 	done; \
 	echo "Watch it at http://localhost:3000/pipeline (start the site with 'make web'). Ctrl+C stops the demo."; \
 	wait
+
+RUN_DB ?= data/demo/jobs.db
+
+record: build
+	./bin/record -db $(RUN_DB) -o data/run.json $(if $(NAME),-name "$(NAME)")

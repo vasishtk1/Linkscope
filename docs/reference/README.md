@@ -14,12 +14,13 @@ Every package and function, documented here instead of in code comments. Each en
 | [internal/merge](merge.md) | Combines every worker's result file into one link graph |
 | [internal/pagerank](pagerank.md) | Scores every domain from the merged graph with PageRank |
 | [internal/validate](validate.md) | Compares our ranking with Common Crawl's published one |
+| [internal/record](record.md) | Saves a finished run (files, workers, event log) to JSON for the replay |
 | [internal/index](index.md) | Sharded backlink index: build once, look up any site with one disk read |
 | [internal/serve](serve.md) | The lookup API's HTTP routes |
 | [internal/loadtest](loadtest.md) | Measures lookup throughput and latency against the API |
 | [internal/fixture](#internalfixture) | Builds fake Common Crawl files for tests |
 | [web/](web.md) | The website: pages, API routes, animated graph |
-| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge`, `pagerank`, `validate`, `index`, `api`, `loadtest` |
+| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge`, `pagerank`, `validate`, `index`, `api`, `loadtest`, `record` |
 
 ## How the packages connect
 
@@ -55,6 +56,12 @@ scores.tsv + cc-domain-ranks.tsv → pagerank.ReadTSV() + validate.ReadRanks() �
 merged.edges.tsv.gz + scores.tsv → index.Build() → data/index/ (manifest.json + shard-000.idx … shard-007.idx)
 website → GET /lookup (cmd/api, serve.Handler) → index.Lookup():
 "github.com" → index.Normalize() → Resolve() → Find(): ShardOf() picks the shard, binary search its directory → Backlinks(): one ReadAt
+```
+
+**Replaying a run (stage 6):**
+
+```
+jobs.Store (SQLite: jobs + events) → record.FromStore() → cmd/record → data/run.json → cmd/api GET /run → website /pipeline
 ```
 
 ## internal/fixture

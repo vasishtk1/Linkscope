@@ -223,14 +223,40 @@ curl -s "localhost:8081/lookup?domain=github.com&limit=5"
 |---|---|---|
 | `-addr` | `:8081` | Listen address |
 | `-index` | `data/index` | Index folder from `cmd/index` |
+| `-run` | `data/run.json` | Saved run from `cmd/record`, served at `/run` for the pipeline replay. Optional: if the file doesn't exist, `/run` answers `404` |
 
 ### `main()`
 
 Parses flags and calls `run`.
 
-### `run(addr, dir string) error`
+### `run(addr, dir, runPath string) error`
 
-Opens the index, logs how many domains, edges and shards it loaded and how long that took, and serves `serve.Handler`. Like the coordinator, it has time limits on reading requests and writing responses, and shuts down cleanly on Ctrl+C or `SIGTERM`.
+Opens the index, logs how many domains, edges and shards it loaded and how long that took, loads the saved run, and serves `serve.Handler`. Like the coordinator, it has time limits on reading requests and writing responses, and shuts down cleanly on Ctrl+C or `SIGTERM`.
+
+### `loadRun(path string) (*record.Recording, error)`
+
+Reads and parses the saved run. A missing file returns `nil` with a log line, so the API works without one. A file that exists but can't be parsed is an error, so a broken recording is noticed at startup.
+
+## cmd/record
+
+Saves a finished run from a coordinator's job database to a JSON file for the website's replay. It only reads the database, so it's instant and safe to run while the coordinator is still up.
+
+```sh
+make record                                          # data/demo/jobs.db → data/run.json
+make record RUN_DB=data/cluster/jobs.db NAME="20 Common Crawl files, 4 workers"
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `-db` | `data/demo/jobs.db` | Job database of the run |
+| `-o` | `data/run.json` | Where to write the recording |
+| `-name` | `"<files> files, <workers> workers"` | Label shown on the website |
+
+Prints a one-line summary. If the database is older than the event log, it also says the history was rebuilt and retries aren't shown.
+
+### `run(dbPath, out, name string) error`
+
+Checks the database exists (so a typo doesn't create an empty one), builds the recording with `record.FromStore`, and writes it to a temp file that's then renamed into place, so the API never reads a half-written file. Restart the API to pick up a new recording.
 
 ## cmd/loadtest
 

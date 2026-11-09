@@ -15,6 +15,7 @@ browser → website (Next.js, :3000) → Go API (:8081) → index shards on disk
 | `GET /lookup?domain=github.com&limit=500` | `200` with the lookup JSON below. `limit` is optional (0 or missing = every backlink) |
 | `GET /known?domain=github.com` | `200 {"known":true}` if the exact domain is in the index (with or without backlinks), else `404` |
 | `GET /network?n=60` | `200` with the `n` highest-scored sites and the links among them, for the landing page background. `n` is 1 to 200 (default 60) |
+| `GET /run` | `200` with the saved run (see [record.md](record.md)) for the pipeline replay, or `404` if the API was started without one |
 | `GET /stats` | `200` with the index manifest: shards, hash, domain and edge counts, data description |
 | `GET /healthz` | `200 ok` |
 
@@ -59,7 +60,7 @@ Errors are JSON too, `{"error": "…"}`:
 
 ## serve.go
 
-### `Handler(ix *index.Index) http.Handler`
+### `Handler(ix *index.Index, run *record.Recording) http.Handler`
 
 Builds the router with Go's method-and-path patterns (`"GET /lookup"`). Every route only reads from the index. Directories are never changed after `Open`, and `ReadAt` is safe to call from many goroutines at once, so Go's HTTP server runs every request on its own goroutine with no locks.
 
@@ -88,5 +89,6 @@ Sets the JSON content type, writes the status, and encodes `v`.
 | `TestLookupErrors` | Missing or blank domain, bad or negative limit → 400; no backlinks or unknown → 404; `POST` → 405 |
 | `TestKnown` | Exact domains only: a link-only domain is known, a subdomain or a made-up site isn't |
 | `TestNetwork` | Default size, an empty link list is `[]` not `null`, bad `n` → 400 |
+| `TestRun` | `404` without a saved run, the recording with one |
 | `TestStatsAndHealth` | Manifest and health check |
 | `TestParallelLookups` | 50 lookups at once, all correct (run with the race detector) |

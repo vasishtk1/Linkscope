@@ -9,12 +9,13 @@ import (
 	"sync"
 
 	"github.com/vasishtk1/Linkscope/internal/index"
+	"github.com/vasishtk1/Linkscope/internal/record"
 )
 
 const maxNetwork = 200
 
-// Handler serves lookups from an open index; every route is read-only, so requests run in parallel without locks.
-func Handler(ix *index.Index) http.Handler {
+// Handler serves lookups from an open index and an optional saved run; every route is read-only, so requests run in parallel without locks.
+func Handler(ix *index.Index, run *record.Recording) http.Handler {
 	mux := http.NewServeMux()
 	network := sync.OnceValues(func() (index.Network, error) { return ix.Network(maxNetwork) })
 	mux.HandleFunc("GET /lookup", func(w http.ResponseWriter, r *http.Request) {
@@ -64,6 +65,13 @@ func Handler(ix *index.Index) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, nw.Top(n))
+	})
+	mux.HandleFunc("GET /run", func(w http.ResponseWriter, r *http.Request) {
+		if run == nil {
+			writeJSON(w, http.StatusNotFound, errorBody("no saved run"))
+			return
+		}
+		writeJSON(w, http.StatusOK, run)
 	})
 	mux.HandleFunc("GET /stats", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, ix.Manifest())

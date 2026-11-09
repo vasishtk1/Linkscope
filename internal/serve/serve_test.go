@@ -10,9 +10,12 @@ import (
 
 	"github.com/vasishtk1/Linkscope/internal/index"
 	"github.com/vasishtk1/Linkscope/internal/links"
+	"github.com/vasishtk1/Linkscope/internal/record"
 )
 
-func newServer(t *testing.T) *httptest.Server {
+func newServer(t *testing.T) *httptest.Server { return newServerWithRun(t, nil) }
+
+func newServerWithRun(t *testing.T, run *record.Recording) *httptest.Server {
 	t.Helper()
 	edges := []links.Edge{
 		{Src: "reddit.com", Dst: "github.com", Pages: 12, ExampleSrc: "https://reddit.com/r/go", ExampleDst: "https://github.com/golang/go"},
@@ -27,7 +30,7 @@ func newServer(t *testing.T) *httptest.Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(Handler(ix))
+	srv := httptest.NewServer(Handler(ix, run))
 	t.Cleanup(func() { srv.Close(); ix.Close() })
 	return srv
 }
@@ -139,4 +142,16 @@ func TestParallelLookups(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+func TestRun(t *testing.T) {
+	var body map[string]string
+	if code := get(t, newServer(t).URL+"/run", &body); code != 404 || body["error"] == "" {
+		t.Fatalf("without a run: status %d body %v", code, body)
+	}
+	srv := newServerWithRun(t, &record.Recording{Name: "demo", Totals: record.Totals{Files: 6, Done: 6}})
+	var got record.Recording
+	if code := get(t, srv.URL+"/run", &got); code != 200 || got.Name != "demo" || got.Totals.Done != 6 {
+		t.Fatalf("status %d, run %+v", code, got)
+	}
 }

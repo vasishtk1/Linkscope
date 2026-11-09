@@ -179,3 +179,39 @@ func (s *Store) ByWorker() (map[string]WorkerTotals, error) {
 	}
 	return out, rows.Err()
 }
+
+// JobRow is a job's full final state, for saving a run.
+type JobRow struct {
+	ID         int64
+	Path       string
+	State      State
+	Attempt    int
+	Worker     string
+	Pages      int
+	CrossLinks int
+	Edges      int
+	DurationMs int64
+	FinishedAt time.Time
+}
+
+// List returns every job in id order.
+func (s *Store) List() ([]JobRow, error) {
+	rows, err := s.db.Query(`SELECT id, path, state, attempt, worker, pages, cross_links, edges, duration_ms, finished_at FROM jobs ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []JobRow{}
+	for rows.Next() {
+		var j JobRow
+		var finished int64
+		if err := rows.Scan(&j.ID, &j.Path, &j.State, &j.Attempt, &j.Worker, &j.Pages, &j.CrossLinks, &j.Edges, &j.DurationMs, &finished); err != nil {
+			return nil, err
+		}
+		if finished > 0 {
+			j.FinishedAt = time.UnixMilli(finished)
+		}
+		out = append(out, j)
+	}
+	return out, rows.Err()
+}

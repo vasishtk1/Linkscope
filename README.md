@@ -71,6 +71,7 @@ Linkscope/
 │   ├── loadtest/main.go       # measures API lookup speed under load
 │   ├── merge/main.go          # combines all worker results into one link graph
 │   ├── pagerank/main.go       # scores every domain from the merged graph
+│   ├── record/main.go         # saves a finished run to JSON for the website replay
 │   ├── validate/main.go       # compares our ranking with Common Crawl's
 │   └── worker/main.go         # claims jobs, processes files, reports back
 ├── internal/
@@ -79,12 +80,13 @@ Linkscope/
 │   ├── extract/               # runs a WAT file through parallel parser goroutines
 │   ├── fixture/               # builds fake Common Crawl files for tests
 │   ├── index/                 # sharded backlink index: build, open, look up a site
-│   ├── jobs/                  # SQLite job list: claims, leases, retries, status
+│   ├── jobs/                  # SQLite job list: claims, leases, retries, status, event log
 │   ├── links/                 # URL → domain, which links count, domain link graph
 │   ├── loadtest/              # runs many lookups at once and records latencies
 │   ├── merge/                 # combines worker result files into one link graph
 │   ├── pagerank/              # PageRank over the domain graph, 0–100 scores
-│   ├── serve/                 # lookup API routes: /lookup, /known, /network, /stats
+│   ├── record/                # saves a run's files, workers and event log for replay
+│   ├── serve/                 # lookup API routes: /lookup, /known, /network, /run, /stats
 │   ├── validate/              # rank agreement with Common Crawl's published ranks
 │   ├── warc/                  # reads records out of WARC/WAT files
 │   ├── wat/                   # parses WAT JSON into pages and links
