@@ -12,6 +12,7 @@ The coordinator is an HTTP server in front of the job list (`internal/jobs`). Wo
 | `POST /jobs/{id}/fail` | `{"worker", "attempt", "error"}` | `204`, or `409` if the lease was lost |
 | `POST /jobs/{id}/release` | `{"worker", "attempt"}` | `204`, or `409` if the lease was lost |
 | `GET /status` | | `200` with counts, totals, rates, every worker's state, and the active, failed, and recent job lists |
+| `GET /events?after=0` | | `200 {"events": [...]}`: the event log (claims, completions, failures, expired leases, releases), oldest first. `after` returns only events with a higher id; anything other than a whole number gets `400` |
 | `GET /timeline` | | `200 {"jobs": [...]}`: every finished job in finish order, with its worker, attempt, pages, edges, duration and finish time |
 
 Bad JSON, a missing worker name, or a bad job id get `400`. Database errors get `500`, and the details are logged on the coordinator only.
@@ -30,6 +31,7 @@ Bad JSON, a missing worker name, or a bad job id get `400`. Database errors get 
 | `Status` | `jobs.Summary` plus `Total`, `UptimeSeconds`, `JobsPerMinute`, `PagesPerSecond`, `Workers`, and `Now`, the coordinator's clock. The dashboard measures job times against `Now` instead of the browser's clock, which could be set differently on another machine |
 | `Worker` | One worker: `Name`, `State`, its current `JobID`, `Path` and `JobSeconds` while working, `LastSeenSeconds`, and `Done` / `Pages` totals |
 | `Timeline` | `Jobs`, the finished jobs for `/timeline` |
+| `Events` | `Events`, the event log for `/events` |
 
 ## server.go
 
@@ -72,6 +74,10 @@ Builds the `Workers` list for `/status`. A worker's state is decided in this ord
 | `offline` | It finished jobs in the database but hasn't talked to this coordinator since it started (for example after a coordinator restart). `LastSeenSeconds` is `-1` |
 
 `Done` and `Pages` come from `store.ByWorker`, so they're correct even for workers this coordinator never saw. The list is sorted by name so the dashboard's cards don't jump around.
+
+### `events` handler
+
+Returns `store.Events(after)`. The replay on the website is built entirely from this list.
 
 ### `timeline` handler
 

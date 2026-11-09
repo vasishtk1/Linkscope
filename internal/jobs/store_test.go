@@ -130,7 +130,7 @@ func TestStaleWorkerLosesLease(t *testing.T) {
 	if err := s.Heartbeat(old.ID, old.Attempt, lease, t0.Add(2*lease)); !errors.Is(err, ErrLeaseLost) {
 		t.Fatalf("stale heartbeat: %v", err)
 	}
-	if err := s.Fail(old.ID, old.Attempt, "boom"); !errors.Is(err, ErrLeaseLost) {
+	if err := s.Fail(old.ID, old.Attempt, "boom", t0); !errors.Is(err, ErrLeaseLost) {
 		t.Fatalf("stale fail: %v", err)
 	}
 	if j, _ := s.Get(old.ID); j.State != Running || j.Worker != "w2" {
@@ -151,14 +151,14 @@ func TestFailRetriesThenGivesUp(t *testing.T) {
 	s := open(t, 2)
 	s.Add([]string{"a"})
 	j := mustClaim(t, s, "w1", t0)
-	if err := s.Fail(j.ID, j.Attempt, "download error"); err != nil {
+	if err := s.Fail(j.ID, j.Attempt, "download error", t0); err != nil {
 		t.Fatal(err)
 	}
 	j = mustClaim(t, s, "w1", t0)
 	if j.Attempt != 2 {
 		t.Fatalf("attempt = %d", j.Attempt)
 	}
-	s.Fail(j.ID, j.Attempt, "download error again")
+	s.Fail(j.ID, j.Attempt, "download error again", t0)
 	got, _ := s.Get(j.ID)
 	if got.State != Failed || got.LastError != "download error again" {
 		t.Fatalf("job = %+v", got)
@@ -186,7 +186,7 @@ func TestReleaseDoesNotUseAnAttempt(t *testing.T) {
 	s := open(t, 1)
 	s.Add([]string{"a"})
 	j := mustClaim(t, s, "w1", t0)
-	if err := s.Release(j.ID, j.Attempt); err != nil {
+	if err := s.Release(j.ID, j.Attempt, t0); err != nil {
 		t.Fatal(err)
 	}
 	again := mustClaim(t, s, "w2", t0)
@@ -248,7 +248,7 @@ func TestSummaryLists(t *testing.T) {
 	b := mustClaim(t, s, "w2", t0)
 	mustClaim(t, s, "w3", t0)
 	s.Complete(a.ID, Result{Pages: 3, Edges: 2, DurationMs: 100}, t0)
-	s.Fail(b.ID, b.Attempt, "corrupt file")
+	s.Fail(b.ID, b.Attempt, "corrupt file", t0)
 
 	sum, err := s.Summary(10)
 	if err != nil {
@@ -289,5 +289,68 @@ func TestFinishedKeepsWorkerAndOrder(t *testing.T) {
 	want := map[string]WorkerTotals{"w1": {Done: 1, Pages: 3}, "w2": {Done: 1, Pages: 4}}
 	if !reflect.DeepEqual(by, want) {
 		t.Fatalf("by worker = %+v, want %+v", by, want)
+	}
+}
+
+func TestEventsTellTheWholeStory(t *testing.T) {
+	s := open(t, 3)
+	s.Add([]string{"a"})
+	first := mustClaim(t, s, "w1", t0)
+	// w1 goes silent; the next claim expires its lease and hands the file to w2.
+	second := mustClaim(t, s, "w2", t0.Add(2*lease))
+	if err := s.Fail(first.ID, first.Attempt, "late", t0.Add(2*lease)); !errors.Is(err, ErrLeaseLost) {
+		t.Fatalf("stale fail: %v", err)
+	}
+	s.Fail(second.ID, second.Attempt, "download error", t0.Add(2*lease+time.Second))
+	third := mustClaim(t, s, "w3", t0.Add(2*lease+2*time.Second))
+	s.Release(third.ID, third.Attempt, t0.Add(2*lease+3*time.Second))
+	fourth := mustClaim(t, s, "w3", t0.Add(2*lease+4*time.Second))
+	s.Complete(fourth.ID, Result{Pages: 9, CrossLinks: 30, Edges: 12, DurationMs: 800}, t0.Add(2*lease+5*time.Second))
+	s.Complete(fourth.ID, Result{Pages: 9}, t0.Add(2*lease+6*time.Second))
+
+	events, err := s.Events(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type row struct {
+		kind    EventKind
+		worker  string
+		attempt int
+	}
+	var got []row
+	for _, e := range events {
+		got = append(got, row{e.Kind, e.Worker, e.Attempt})
+		if e.Path != "a" || e.Job != first.ID {
+			t.Errorf("event %+v has the wrong job", e)
+		}
+	}
+	want := []row{
+		{EventClaimed, "w1", 1}, {EventExpired, "w1", 1}, {EventClaimed, "w2", 2}, {EventFailed, "w2", 2},
+		{EventClaimed, "w3", 3}, {EventReleased, "w3", 3}, {EventClaimed, "w3", 3}, {EventCompleted, "w3", 3},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("events =\n%v\nwant\n%v", got, want)
+	}
+	done := events[len(events)-1]
+	if done.Pages != 9 || done.CrossLinks != 30 || done.Edges != 12 || done.DurationMs != 800 || !done.At.Equal(t0.Add(2*lease+5*time.Second)) {
+		t.Fatalf("completed event = %+v", done)
+	}
+	if events[1].Error != "lease expired on worker w1" || events[3].Error != "download error" || events[3].Final {
+		t.Fatalf("expired/failed events = %+v / %+v", events[1], events[3])
+	}
+	later, _ := s.Events(events[5].ID)
+	if len(later) != 2 {
+		t.Fatalf("events after id %d = %d, want 2", events[5].ID, len(later))
+	}
+}
+
+func TestLastFailureIsFinal(t *testing.T) {
+	s := open(t, 1)
+	s.Add([]string{"a"})
+	j := mustClaim(t, s, "w1", t0)
+	s.Fail(j.ID, j.Attempt, "corrupt", t0)
+	events, _ := s.Events(0)
+	if len(events) != 2 || !events[1].Final {
+		t.Fatalf("events = %+v", events)
 	}
 }

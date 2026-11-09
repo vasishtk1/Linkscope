@@ -244,3 +244,27 @@ func TestTimeline(t *testing.T) {
 		t.Fatalf("timeline = %+v", tl.Jobs)
 	}
 }
+
+func TestEvents(t *testing.T) {
+	_, hs, now := newServer(t, "a")
+	claim(t, hs.URL, "w1")
+	*now = now.Add(3 * time.Second)
+	post(t, hs.URL+"/jobs/1/fail", api.FailRequest{Worker: "w1", Attempt: 1, Error: "boom"})
+	claim(t, hs.URL, "w2")
+
+	var ev api.Events
+	getJSON(t, hs.URL+"/events", &ev)
+	if len(ev.Events) != 3 || ev.Events[1].Kind != jobs.EventFailed || ev.Events[1].Error != "boom" ||
+		ev.Events[2].Worker != "w2" || !ev.Events[1].At.Equal(*now) {
+		t.Fatalf("events = %+v", ev.Events)
+	}
+	getJSON(t, hs.URL+"/events?after=2", &ev)
+	if len(ev.Events) != 1 || ev.Events[0].Kind != jobs.EventClaimed {
+		t.Fatalf("after=2: %+v", ev.Events)
+	}
+	resp, _ := http.Get(hs.URL + "/events?after=x")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("after=x: status %d", resp.StatusCode)
+	}
+}

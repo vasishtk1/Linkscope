@@ -71,6 +71,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /jobs/{id}/release", s.release)
 	mux.HandleFunc("GET /status", s.status)
 	mux.HandleFunc("GET /timeline", s.timeline)
+	mux.HandleFunc("GET /events", s.events)
 	return mux
 }
 
@@ -150,7 +151,7 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request) {
 	if !ok || !decode(w, r, &req) {
 		return
 	}
-	err := s.store.Fail(id, req.Attempt, req.Error)
+	err := s.store.Fail(id, req.Attempt, req.Error, s.now())
 	s.saw(req.Worker, idle)
 	if err == nil {
 		s.logf("job %d attempt %d failed on %s: %s", id, req.Attempt, req.Worker, req.Error)
@@ -164,7 +165,7 @@ func (s *Server) release(w http.ResponseWriter, r *http.Request) {
 	if !ok || !decode(w, r, &req) {
 		return
 	}
-	err := s.store.Release(id, req.Attempt)
+	err := s.store.Release(id, req.Attempt, s.now())
 	s.saw(req.Worker, idle)
 	if err == nil {
 		s.logf("job %d released by %s", id, req.Worker)
@@ -236,6 +237,25 @@ func (s *Server) workers(now time.Time) ([]api.Worker, error) {
 	}
 	slices.SortFunc(out, func(a, b api.Worker) int { return strings.Compare(a.Name, b.Name) })
 	return out, nil
+}
+
+// events serves the event log; ?after=N returns only newer events, so a live page can ask for just what changed.
+func (s *Server) events(w http.ResponseWriter, r *http.Request) {
+	var after int64
+	if q := r.URL.Query().Get("after"); q != "" {
+		n, err := strconv.ParseInt(q, 10, 64)
+		if err != nil || n < 0 {
+			http.Error(w, "after must be a whole number, 0 or more", http.StatusBadRequest)
+			return
+		}
+		after = n
+	}
+	ev, err := s.store.Events(after)
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, api.Events{Events: ev})
 }
 
 func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {

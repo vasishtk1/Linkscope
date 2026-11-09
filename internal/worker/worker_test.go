@@ -361,7 +361,7 @@ func TestWorkerAbandonsJobWhenLeaseIsLost(t *testing.T) {
 	<-started
 
 	// The coordinator gives the job away behind the worker's back.
-	if err := c.store.Release(1, 1); err != nil {
+	if err := c.store.Release(1, 1, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.After(5 * time.Second)

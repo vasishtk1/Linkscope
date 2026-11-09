@@ -66,3 +66,7 @@ type Worker struct {
 type Timeline struct {
 	Jobs []jobs.FinishedJob `json:"jobs"`
 }
+
+type Events struct {
+	Events []jobs.Event `json:"events"`
+}

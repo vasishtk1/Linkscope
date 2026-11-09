@@ -58,6 +58,20 @@ CREATE TABLE IF NOT EXISTS jobs (
 	finished_at   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS jobs_by_state ON jobs (state, id);
+CREATE TABLE IF NOT EXISTS events (
+	id          INTEGER PRIMARY KEY,
+	at          INTEGER NOT NULL,
+	job         INTEGER NOT NULL,
+	worker      TEXT    NOT NULL DEFAULT '',
+	kind        TEXT    NOT NULL,
+	attempt     INTEGER NOT NULL DEFAULT 0,
+	final       INTEGER NOT NULL DEFAULT 0,
+	pages       INTEGER NOT NULL DEFAULT 0,
+	cross_links INTEGER NOT NULL DEFAULT 0,
+	edges       INTEGER NOT NULL DEFAULT 0,
+	duration_ms INTEGER NOT NULL DEFAULT 0,
+	error       TEXT    NOT NULL DEFAULT ''
+);
 `
 
 func Open(path string, maxAttempts int) (*Store, error) {
@@ -124,6 +138,9 @@ func (s *Store) Claim(worker string, lease time.Duration, now time.Time) (Job, b
 	if err != nil {
 		return Job{}, false, err
 	}
+	if err := logEvent(tx, Event{At: now, Job: j.ID, Worker: worker, Kind: EventClaimed, Attempt: j.Attempt}); err != nil {
+		return Job{}, false, err
+	}
 	return j, true, tx.Commit()
 }
 
@@ -142,6 +159,30 @@ func (s *Store) Expire(now time.Time) (int, error) {
 }
 
 func (s *Store) expire(tx *sql.Tx, now time.Time) (int, error) {
+	rows, err := tx.Query(`SELECT id, worker, attempt FROM jobs WHERE state = 'running' AND lease_expires <= ?`, now.UnixMilli())
+	if err != nil {
+		return 0, err
+	}
+	var expired []Event
+	for rows.Next() {
+		e := Event{At: now, Kind: EventExpired}
+		if err := rows.Scan(&e.Job, &e.Worker, &e.Attempt); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		e.Final = e.Attempt >= s.maxAttempts
+		e.Error = "lease expired on worker " + e.Worker
+		expired = append(expired, e)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	for _, e := range expired {
+		if err := logEvent(tx, e); err != nil {
+			return 0, err
+		}
+	}
 	res, err := tx.Exec(`
 		UPDATE jobs
 		SET state = CASE WHEN attempt >= ? THEN 'failed' ELSE 'pending' END,
@@ -167,33 +208,71 @@ func (s *Store) Heartbeat(id int64, attempt int, lease time.Duration, now time.T
 
 // Complete marks a job done; finishing an already-done job is a no-op.
 func (s *Store) Complete(id int64, r Result, now time.Time) error {
-	_, err := s.db.Exec(`
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	e := Event{At: now, Job: id, Kind: EventCompleted, Pages: r.Pages, CrossLinks: r.CrossLinks, Edges: r.Edges, DurationMs: r.DurationMs}
+	var st State
+	err = tx.QueryRow(`SELECT state, worker, attempt FROM jobs WHERE id = ?`, id).Scan(&st, &e.Worker, &e.Attempt)
+	if errors.Is(err, sql.ErrNoRows) || st == Done {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(`
 		UPDATE jobs
 		SET state = 'done', lease_expires = 0, last_error = '',
 		    pages = ?, cross_links = ?, edges = ?, duration_ms = ?, finished_at = ?
-		WHERE id = ? AND state != 'done'`,
+		WHERE id = ?`,
 		r.Pages, r.CrossLinks, r.Edges, r.DurationMs, now.UnixMilli(), id)
-	return err
+	if err != nil {
+		return err
+	}
+	if err := logEvent(tx, e); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Fail records an error and puts the job back in line, or marks it failed after the last attempt.
-func (s *Store) Fail(id int64, attempt int, msg string) error {
-	res, err := s.db.Exec(`
+func (s *Store) Fail(id int64, attempt int, msg string, now time.Time) error {
+	return s.leaseChange(id, attempt, Event{At: now, Kind: EventFailed, Error: msg, Final: attempt >= s.maxAttempts}, `
 		UPDATE jobs
 		SET state = CASE WHEN attempt >= ? THEN 'failed' ELSE 'pending' END,
 		    last_error = ?, worker = '', lease_expires = 0
 		WHERE id = ? AND attempt = ? AND state = 'running'`,
 		s.maxAttempts, msg, id, attempt)
-	return leaseUpdate(res, err)
 }
 
 // Release hands a job back without using up an attempt, for workers shutting down cleanly.
-func (s *Store) Release(id int64, attempt int) error {
-	res, err := s.db.Exec(`
+func (s *Store) Release(id int64, attempt int, now time.Time) error {
+	return s.leaseChange(id, attempt, Event{At: now, Kind: EventReleased}, `
 		UPDATE jobs SET state = 'pending', attempt = attempt - 1, worker = '', lease_expires = 0
 		WHERE id = ? AND attempt = ? AND state = 'running'`,
 		id, attempt)
-	return leaseUpdate(res, err)
+}
+
+// leaseChange runs an update that needs the caller to still hold the lease, and logs the event in the same transaction.
+func (s *Store) leaseChange(id int64, attempt int, e Event, query string, args ...any) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	e.Job, e.Attempt = id, attempt
+	if err := tx.QueryRow(`SELECT worker FROM jobs WHERE id = ?`, id).Scan(&e.Worker); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if err := leaseUpdate(tx.Exec(query, args...)); err != nil {
+		return err
+	}
+	if err := logEvent(tx, e); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func leaseUpdate(res sql.Result, err error) error {

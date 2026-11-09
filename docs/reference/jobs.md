@@ -31,6 +31,26 @@ The coordinator's job list, stored in SQLite. One row per Common Crawl file. Thi
 
 An index on `(state, id)` makes "oldest pending job" a quick lookup instead of a full table scan.
 
+## The event log
+
+The `jobs` table only holds each file's **current** state. A file that failed twice and then worked just says `done`. To replay a run on the website, the store also keeps an **`events`** table: one row every time something happens to a job.
+
+| Column | Meaning |
+|---|---|
+| `id` | Event number, in the order they happened |
+| `at` | When (Unix ms, from the coordinator's clock) |
+| `job`, `worker`, `attempt` | Which job, which worker, which attempt |
+| `kind` | `claimed`, `completed`, `failed`, `expired` (the worker went silent), or `released` (the worker shut down cleanly) |
+| `final` | For `failed` and `expired`: the job has used every attempt and won't be tried again |
+| `pages`, `cross_links`, `edges`, `duration_ms` | For `completed`: the results |
+| `error` | For `failed` and `expired`: why |
+
+**Every event is written in the same transaction as the job change it describes.** Either both are saved or neither is, so the history can never disagree with the jobs table, even if the coordinator crashes halfway. Actions that are refused (a stale worker's `Fail`, a second `Complete`) change nothing and log nothing.
+
+A 20-file run produces about 40–60 events, a 1,000-file run a few thousand, so the table stays small.
+
+Older databases get the `events` table automatically on `Open` (`CREATE TABLE IF NOT EXISTS`), but they have no history from before it existed.
+
 ## Types
 
 ### `State`
@@ -92,7 +112,7 @@ Moves every running job whose lease has passed back to `pending`, or to `failed`
 
 ### `expire(tx, now)` (unexported)
 
-The shared SQL behind `Expire` and `Claim`, run inside the caller's transaction. Records `lease expired on worker <name>` as the error.
+The shared SQL behind `Expire` and `Claim`, run inside the caller's transaction. Records `lease expired on worker <name>` as the error. First it reads which jobs are about to expire, and logs an `expired` event for each with the worker that lost it, because the update clears the worker's name.
 
 ### `(*Store) Heartbeat(id int64, attempt int, lease time.Duration, now time.Time) error`
 
@@ -104,15 +124,23 @@ Marks the job done and saves the results. **Accepted from any attempt**, even a 
 
 The `worker` column is left as it is, so a finished job remembers which worker held it last. That's almost always the worker that finished it. The rare exception is a stale worker finishing after its lease moved to someone else; the job is then credited to the new holder.
 
+It runs in a transaction: read the job, skip it if it's already done, update it, and log a `completed` event with the results.
+
 **Why stale completions are accepted:** the result file is the same no matter which worker produced it, since extraction is deterministic and the file is replaced atomically. So if an old worker finishes first, its result is just as good, and the job is done sooner.
 
-### `(*Store) Fail(id int64, attempt int, msg string) error`
+### `(*Store) Fail(id int64, attempt int, msg string, now time.Time) error`
 
-Records the error. The job goes back to pending, or to `failed` once `attempt >= maxAttempts`. Requires the current attempt; otherwise `ErrLeaseLost`.
+Records the error and logs a `failed` event (with `final` set on the last attempt). The job goes back to pending, or to `failed` once `attempt >= maxAttempts`. Requires the current attempt; otherwise `ErrLeaseLost`.
 
-### `(*Store) Release(id int64, attempt int) error`
+### `(*Store) Release(id int64, attempt int, now time.Time) error`
 
-Puts a running job back to pending **and undoes the attempt count**. Workers call this when shutting down cleanly (Ctrl+C, `docker compose down`), so stopping the cluster doesn't push jobs toward `failed`. Requires the current attempt.
+Logs a `released` event and puts a running job back to pending **and undoes the attempt count**. Workers call this when shutting down cleanly (Ctrl+C, `docker compose down`), so stopping the cluster doesn't push jobs toward `failed`. Requires the current attempt.
+
+`Fail` and `Release` take `now` so their events have a time. The coordinator passes its clock, and tests pass a fixed time.
+
+### `leaseChange(id, attempt, e, query, args...)` (unexported)
+
+The shared body of `Fail` and `Release`: in one transaction, read the job's current worker (the update is about to clear it), run the update, check the caller still held the lease, and log the event.
 
 ### `leaseUpdate(res, err)` (unexported)
 
@@ -121,6 +149,20 @@ Turns "the UPDATE matched 0 rows" into `ErrLeaseLost`. Shared by `Heartbeat`, `F
 ### `(*Store) Get(id int64) (Job, error)`
 
 Reads one job. Used by tests and for debugging.
+
+## events.go
+
+### `EventKind`, `Event`
+
+The kinds and one row of the log, as above. `Event` also carries the job's file `Path` (joined from `jobs`), so a replay can label files without a second lookup.
+
+### `logEvent(tx, e)` (unexported)
+
+Inserts one event inside the caller's transaction.
+
+### `(*Store) Events(after int64) ([]Event, error)`
+
+Every event with an id above `after`, oldest first. `Events(0)` is the whole history. A live page passes the last id it has, so each update only carries what's new.
 
 ## summary.go
 
