@@ -258,6 +258,31 @@ Prints a one-line summary. If the database is older than the event log, it also 
 
 Checks the database exists (so a typo doesn't create an empty one), builds the recording with `record.FromStore`, and writes it to a temp file that's then renamed into place, so the API never reads a half-written file. Restart the API to pick up a new recording.
 
+## cmd/slicewat
+
+Cuts the start of a WAT file into smaller files of real pages, for `make demo`.
+
+```sh
+./bin/slicewat -in data/sample.warc.wat.gz -out data/demo/files -files 10 -pages 2000 > data/demo/paths.txt
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `-in` | `data/sample.warc.wat.gz` | WAT file to cut up |
+| `-out` | `data/demo/files` | Folder for the new files (`demo-001.warc.wat.gz`, …) |
+| `-files` | `10` | How many files to make |
+| `-pages` | `2000` | Pages (HTTP responses) per file |
+
+Prints each new file's name, one per line, which is exactly the path list the coordinator's `-paths` flag reads. If the input runs out early, it stops and says so on stderr.
+
+### `run(in, out string, files, pages int) error`
+
+Opens the input once and calls `writeFile` for each output, so file 2 continues where file 1 stopped. It only reads as much of the input as it needs.
+
+### `writeFile(rd *warc.Reader, path string, pages int) (int, error)`
+
+Copies `metadata` records with `warc.WriteRecord` until it has written `pages` HTTP responses. A record counts as a response if its JSON contains `"HTTP-Response-Metadata"`, which is a byte search instead of a full JSON parse, so cutting is quick. On a 100-page test file this count matched the extractor's exactly (100 pages, 0 parse errors).
+
 ## cmd/loadtest
 
 Measures lookup speed against a running `cmd/api`. **It uses most of the CPU while it runs**, so keep runs short on a laptop.

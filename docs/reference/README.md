@@ -20,7 +20,7 @@ Every package and function, documented here instead of in code comments. Each en
 | [internal/loadtest](loadtest.md) | Measures lookup throughput and latency against the API |
 | [internal/fixture](#internalfixture) | Builds fake Common Crawl files for tests |
 | [web/](web.md) | The website: pages, API routes, animated graph |
-| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge`, `pagerank`, `validate`, `index`, `api`, `loadtest`, `record` |
+| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge`, `pagerank`, `validate`, `index`, `api`, `loadtest`, `record`, `slicewat` |
 
 ## How the packages connect
 

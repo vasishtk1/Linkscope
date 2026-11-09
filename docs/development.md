@@ -27,7 +27,7 @@
 | `make loadtest` | Measures lookup speed against a running API (8 at once for 10s; uses most of the CPU while it runs) |
 | `make cc-ranks` | Saves Common Crawl's top 1,000,000 domains (`CC_TOP`) from their web graph (`CC_GRAPH`, default `cc-main-2026-aug-sep-oct`) to `data/cc-domain-ranks.tsv` |
 | `make validate` | Compares `data/scores.tsv` with `data/cc-domain-ranks.tsv` and prints how closely they agree |
-| `make demo` | A small local run to watch on the dashboard: serves `DEMO_FILES` (default 6) copies of the sample file from your own machine and starts a coordinator on :8080 with `DEMO_WORKERS` (default 3) workers using one parser each. Nothing is downloaded. Ctrl+C stops everything |
+| `make demo` | A small, light local run to watch on the dashboard: cuts the sample into `DEMO_FILES` (default 10) files of `DEMO_PAGES` (default 2,000) real pages, serves them from your own machine, and starts a coordinator on :8080 with `DEMO_WORKERS` (default 3) workers using one parser each. Nothing is downloaded. Ctrl+C stops everything |
 | `make record` | Saves the finished run in `RUN_DB` (default `data/demo/jobs.db`) to `data/run.json` for the website's replay. `NAME="..."` sets its label. Restart the API (`make web`) to load it |
 | `make sample` | Downloads the first WAT file of the crawl in `CRAWL` (default `CC-MAIN-2026-43`) to `data/sample.warc.wat.gz` |
 
@@ -53,7 +53,9 @@ make demo    # terminal 2: coordinator + 3 workers on local copies of the sample
 
 The dashboard reads any coordinator at `LINKSCOPE_COORDINATOR` (default `http://localhost:8080`), so it also works with `make up` or a cluster started by hand.
 
-**About `make demo`:** each copy is the same 155 MB sample file, served by `python3 -m http.server` on 127.0.0.1:8090. The workers download from there instead of Common Crawl. With one parser per worker, each file takes about 9 seconds and uses one CPU core per worker. A tiny run (`make demo DEMO_FILES=2 DEMO_WORKERS=2`) took 9.3s per file and gave 22,020 pages per file, the same as the real sample. The coordinator keeps running after the work is done so the finished run stays on the dashboard; Ctrl+C stops it.
+**About `make demo`:** `cmd/slicewat` cuts the start of the sample into small files of consecutive records, so every file has different real pages and links (10 × 2,000 = 20,000 of the sample's 22,020 pages). They're served by `python3 -m http.server` on 127.0.0.1:8090, and the workers download from there instead of Common Crawl. The files are small on purpose, so a demo is easy on a laptop: a 100-page slice took 0.03s to extract on one core, and a 2,000-page file is about a tenth of the sample. An earlier version gave each worker a full copy of the sample, which kept a core busy for about 9 seconds per file.
+
+The coordinator keeps running after the work is done so the finished run stays on the dashboard. Ctrl+C stops it, then `make record` saves the run to `data/run.json` for the replay. `make demo` deletes `data/demo/` first, so record a run before starting another.
 
 ## Running a cluster in Docker
 

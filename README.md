@@ -72,6 +72,7 @@ Linkscope/
 │   ├── merge/main.go          # combines all worker results into one link graph
 │   ├── pagerank/main.go       # scores every domain from the merged graph
 │   ├── record/main.go         # saves a finished run to JSON for the website replay
+│   ├── slicewat/main.go       # cuts a WAT file into small files of real pages for the demo
 │   ├── validate/main.go       # compares our ranking with Common Crawl's
 │   └── worker/main.go         # claims jobs, processes files, reports back
 ├── internal/

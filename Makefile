@@ -74,15 +74,14 @@ cc-ranks:
 validate: build
 	./bin/validate -scores data/scores.tsv -ranks data/cc-domain-ranks.tsv
 
-DEMO_FILES ?= 6
+DEMO_FILES ?= 10
+DEMO_PAGES ?= 2000
 DEMO_WORKERS ?= 3
 
 demo: build
 	@test -f data/sample.warc.wat.gz || $(MAKE) sample
 	rm -rf data/demo && mkdir -p data/demo/files
-	for i in $$(seq 1 $(DEMO_FILES)); do \
-		ln -s ../../sample.warc.wat.gz data/demo/files/demo-$$i.warc.wat.gz; echo demo-$$i.warc.wat.gz; \
-	done > data/demo/paths.txt
+	./bin/slicewat -in data/sample.warc.wat.gz -out data/demo/files -files $(DEMO_FILES) -pages $(DEMO_PAGES) > data/demo/paths.txt
 	@pids=""; trap 'kill $$pids 2>/dev/null' EXIT; \
 	python3 -m http.server 8090 -b 127.0.0.1 -d data/demo/files >/dev/null 2>&1 & pids="$$pids $$!"; \
 	./bin/coordinator -db data/demo/jobs.db -paths data/demo/paths.txt -limit 0 & pids="$$pids $$!"; \
@@ -90,7 +89,7 @@ demo: build
 	for i in $$(seq 1 $(DEMO_WORKERS)); do \
 		./bin/worker -id worker-$$i -source http://127.0.0.1:8090 -out data/demo/results -parsers 1 & pids="$$pids $$!"; \
 	done; \
-	echo "Watch it at http://localhost:3000/pipeline (start the site with 'make web'). Ctrl+C stops the demo."; \
+	echo "Watch it at http://localhost:3000/pipeline (start the site with 'make web'). When it's done, Ctrl+C, then 'make record' to save it for the replay."; \
 	wait
 
 RUN_DB ?= data/demo/jobs.db

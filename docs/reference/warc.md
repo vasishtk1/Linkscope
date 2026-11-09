@@ -54,6 +54,12 @@ Returns the next record, or `io.EOF` when the stream ends cleanly.
 - Missing or negative `Content-Length`: the body boundary can't be known
 - Stream ends mid-record: `io.ErrUnexpectedEOF`, which is distinct from a clean `io.EOF`, so a truncated download isn't mistaken for a finished file
 
+### `WriteRecord(w io.Writer, rec *Record) error`
+
+The opposite of `Next`: writes a record with `WARC-Type`, `WARC-Target-URI` and `Content-Length` headers, the body, and the closing blank lines, compressed as its own gzip member like Common Crawl does. `cmd/slicewat` uses it to cut small demo files out of a real WAT file. Only the three headers this package reads are written; the others in real files (dates, record ids) aren't needed by the extractor.
+
+A round-trip test writes two records and reads them back with `Next`.
+
 ### `readLine() (string, error)`
 
 Reads one line and strips the trailing `\r\n` or `\n`. WARC uses `\r\n`, but stripping both is more forgiving.
