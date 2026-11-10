@@ -102,7 +102,7 @@ Linkscope/
 ├── web/                       # Next.js website
 │   ├── app/                   # home and pipeline pages, API routes (lookup, network, pipeline, run, CSV, favicons)
 │   ├── components/            # search, link graph, network background, stats, table, pipeline replay scene
-│   └── lib/                   # calls the lookup API and the coordinator, replay engine, shared types
+│   └── lib/                   # calls the lookup API and the coordinator, replay engine, saved searches, shared types
 ├── .dockerignore              # keeps data/ and docs out of the Docker build
 ├── Dockerfile                 # builds all binaries into one small image
 ├── docker-compose.yml         # local cluster: 1 coordinator + N workers

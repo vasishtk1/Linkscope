@@ -6,6 +6,9 @@ export type Backlink = {
   exampleTarget: string;
 };
 
+// Origin is one Common Crawl file that had links to the site, matched to the replay by file name.
+export type Origin = { file: string; pages: number };
+
 export type Lookup = {
   domain: string;
   score: number | null;
@@ -14,6 +17,9 @@ export type Lookup = {
   nofollowPages: number;
   backlinks: Backlink[];
   source: string;
+  originFiles?: number;
+  origins?: Origin[];
+  tookMs?: number;
 };
 
 export type Network = {

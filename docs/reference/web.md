@@ -20,7 +20,10 @@ cd web && LINKSCOPE_API=http://localhost:8082 npm run dev
 1. **Landing:** name, description, and the search box in the middle of the screen, plus example sites to try. Behind them, the top sites in the index drift toward you with their real icons and the links between them (`NetworkBackground`).
 2. **Search:** the URL becomes `/?d=<site>`, so results can be shared and the back button works. The header moves up and the graph builds.
 3. **Scroll down:** stats cards and the backlinks table.
-4. **Bottom:** "Download backlinks CSV".
+4. **How we found this:** how many Common Crawl files the site's links came from, with a **Watch how** button that opens that search's replay on the Pipeline page. Only shown when the index has origins (see [index.md](index.md)).
+5. **Bottom:** "Download backlinks CSV".
+
+Every site found is saved in this browser (`searches.ts`), so the Pipeline page can list it under "Your searches".
 
 The **Pipeline** link in the header opens `/pipeline`: press Play to watch a real pipeline run replayed, or watch one live while it's happening (see `pipeline.tsx` below).
 
@@ -88,7 +91,7 @@ Talks to the coordinator at `LINKSCOPE_COORDINATOR` (default `http://localhost:8
 
 ### `types.ts`
 
-`Backlink`, `Lookup` and `Network`, the shapes the lookup API returns. `PipelineStatus`, `PipelineWorker`, `RunEvent` and `Pipeline` match the coordinator's JSON, and `Recording` matches `cmd/record`'s file.
+`Backlink`, `Origin`, `Lookup` and `Network`, the shapes the lookup API returns (`originFiles`, `origins` and `tookMs` are optional because older indexes have no origins). `PipelineStatus`, `PipelineWorker`, `RunEvent` and `Pipeline` match the coordinator's JSON, and `Recording` matches `cmd/record`'s file.
 
 ### `replay.ts`
 
@@ -99,6 +102,20 @@ The replay engine. Plain functions with no React, so the same code drives both t
 - **Why compute each frame from scratch:** the state at any time depends only on the events before it, so the slider can jump anywhere, backwards included, and always shows exactly what happened. Replaying a few hundred events 30 times a second is cheap.
 - **Progress bars:** in a replay the end of each attempt is known, so a worker's bar is exact. While live, the end isn't known yet, so the bar estimates from the median file time and stops at 95% until the file actually finishes.
 - **`fileLabel`, `fmt`, `clock`:** short file names, numbers with commas, and `m:ss` times.
+
+### `searches.ts`
+
+Remembers the sites you've searched, on this device only, so the Pipeline page can replay each one.
+
+- **Where it's kept:** `localStorage` under `linkscope.searches.v1`. It survives reloads and closing the browser, stays on this device and browser, and is never sent anywhere. Each person's list is their own.
+- **`SavedSearch`:** site, score, linking sites and pages, origins (which files the links came from), lookup time, data source, and when it was searched. That's everything the replay needs, so the Pipeline page doesn't have to look the site up again.
+- **`saveSearch(lookup)`** adds a search to the top of the list. **`addSearch(list, s)`** does the list part: a repeat search moves to the top instead of showing twice, and the list keeps the newest 20.
+- **`parse(raw)`** reads the stored text. Anything broken (not JSON, not a list, rows missing fields) becomes an empty list or is dropped, so a bad value can't break the page.
+- **`useSearches()`** gives a component the current list and re-renders it when the list changes, in this tab or another one. It uses React's `useSyncExternalStore`, which is made for reading outside state like storage. The parsed list is cached by its raw text, so React gets the same array until something actually changes.
+- **`clearSearches()`** empties the list.
+- If storage is blocked (some private windows), saving quietly does nothing and the list stays empty.
+
+Checked with a small Node script: empty, broken and wrong-shape values give an empty list, bad rows are dropped, 25 searches keep the newest 20, and a repeat moves to the top without a duplicate.
 
 ### `badge.ts`
 
@@ -114,6 +131,8 @@ The header on both pages: the logo (a link home, which also clears a search) plu
 ### `linkscope.tsx` — `Linkscope`
 
 The page. Reads `?d=` from the URL and fetches `/api/lookup`. The page state (idle, loading, found, missing, error) is derived from the URL plus the last answer, rather than stored separately, so it can never fall out of sync with the address bar. Old requests are cancelled with an `AbortController` when the search changes.
+
+When a site is found, it's saved with `saveSearch`, and `HowWeFound` shows below the table if the answer has origins.
 
 It shows `NetworkBackground` only while there's no search, inside `AnimatePresence`: it fades in over 1.2s and fades out in 0.4s when a search starts. Unmounting it stops its animation loop completely, so it costs nothing while you look at results.
 

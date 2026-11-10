@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Play } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import type { Lookup } from "@/lib/types";
 import { SearchBar } from "./search-bar";
@@ -11,6 +13,7 @@ import { BacklinksTable } from "./backlinks-table";
 import { DownloadCsv } from "./download-csv";
 import { NetworkBackground } from "./network-background";
 import { SiteHeader } from "./site-header";
+import { saveSearch } from "@/lib/searches";
 
 type Outcome = { kind: "found"; data: Lookup } | { kind: "missing" } | { kind: "error" };
 type State = { kind: "idle" } | { kind: "loading" } | Outcome;
@@ -37,7 +40,9 @@ export function Linkscope() {
       .then(async (res) => {
         if (res.status === 404) return done({ kind: "missing" });
         if (!res.ok) return done({ kind: "error" });
-        done({ kind: "found", data: await res.json() });
+        const data: Lookup = await res.json();
+        saveSearch(data);
+        done({ kind: "found", data });
       })
       .catch((err) => {
         if (err.name !== "AbortError") done({ kind: "error" });
@@ -147,11 +152,35 @@ function Results({ data }: { data: Lookup }) {
         <BacklinksTable backlinks={data.backlinks} total={data.linkingDomains} />
       </motion.section>
 
+      {!!data.origins?.length && <HowWeFound data={data} />}
+
       <section className="mt-24 flex flex-col items-center gap-3 border-t border-zinc-900 pt-12">
         <DownloadCsv domain={data.domain} count={data.linkingDomains} />
         <p className="text-xs text-zinc-600">{data.source}</p>
       </section>
     </div>
+  );
+}
+
+// HowWeFound says which files the site's links came from and links to that search's replay.
+function HowWeFound({ data }: { data: Lookup }) {
+  const files = data.originFiles ?? data.origins?.length ?? 0;
+  return (
+    <section className="mt-16 flex flex-col gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 className="text-sm font-medium text-zinc-100">How we found this</h2>
+        <p className="mt-1 text-sm text-zinc-400">
+          {data.linkingPages.toLocaleString()} linking pages to <span className="font-mono text-zinc-200">{data.domain}</span>, found in{" "}
+          {files.toLocaleString()} Common Crawl {files === 1 ? "file" : "files"}. Watch the run that found them.
+        </p>
+      </div>
+      <Link
+        href={`/pipeline?search=${encodeURIComponent(data.domain)}`}
+        className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg bg-blue-500 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-blue-400 sm:self-auto"
+      >
+        <Play className="h-4 w-4" fill="currentColor" /> Watch how
+      </Link>
+    </section>
   );
 }
 
