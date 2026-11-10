@@ -19,7 +19,7 @@
 | `make sample-edges` | Extracts `data/sample.warc.wat.gz` into `data/sample.edges.tsv` for the website |
 | `make sample-scores` | Runs PageRank on the sample edges into `data/sample.scores.tsv` for the website |
 | `make sample-index` | Builds the sample index into `data/sample-index/` from the sample edges and scores |
-| `make web` | Builds the sample index, starts the Go API on :8081, and runs the website on localhost:3000 (Ctrl+C stops both) |
+| `make web` | Starts the Go API on :8081 and runs the website on localhost:3000 (Ctrl+C stops both). It serves the demo's index (`data/demo/index`) if `make demo-save` has built one, so searches and the pipeline replay come from the same run; otherwise it builds and serves the sample index. `WEB_INDEX=...` picks one by hand |
 | `make merge` | Merges every result file in `RESULTS` (default `data/results`) into `data/merged.edges.tsv.gz` (`RESULTS=data/cluster/results make merge` for the Docker cluster) |
 | `make pagerank` | Scores every domain in `data/merged.edges.tsv.gz` and writes `data/scores.tsv` |
 | `make index` | Builds the sharded backlink index in `data/index/` from `data/merged.edges.tsv.gz` and `data/scores.tsv` |
@@ -29,6 +29,8 @@
 | `make validate` | Compares `data/scores.tsv` with `data/cc-domain-ranks.tsv` and prints how closely they agree |
 | `make demo` | A small, light local run to watch on the dashboard: cuts the sample into `DEMO_FILES` (default 10) files of `DEMO_PAGES` (default 2,000) real pages, serves them from your own machine, and starts a coordinator on :8080 with `DEMO_WORKERS` (default 3) workers using one parser each. Nothing is downloaded. Ctrl+C stops everything |
 | `make record` | Saves the finished run in `RUN_DB` (default `data/demo/jobs.db`) to `data/run.json` for the website's replay. `NAME="..."` sets its label. Restart the API (`make web`) to load it |
+| `make demo-index` | Merges the demo's results (noting which files each site's links came from), runs PageRank, and builds `data/demo/index` |
+| `make demo-save` | `make demo-index` then `make record`: after a demo, this is the one command that saves it for the website |
 | `make sample` | Downloads the first WAT file of the crawl in `CRAWL` (default `CC-MAIN-2026-43`) to `data/sample.warc.wat.gz` |
 
 ## Running a cluster without Docker
@@ -55,7 +57,11 @@ The dashboard reads any coordinator at `LINKSCOPE_COORDINATOR` (default `http://
 
 **About `make demo`:** `cmd/slicewat` cuts the start of the sample into small files of consecutive records, so every file has different real pages and links (10 × 2,000 = 20,000 of the sample's 22,020 pages). They're served by `python3 -m http.server` on 127.0.0.1:8090, and the workers download from there instead of Common Crawl. The files are small on purpose, so a demo is easy on a laptop: a 100-page slice took 0.03s to extract on one core, and a 2,000-page file is about a tenth of the sample. An earlier version gave each worker a full copy of the sample, which kept a core busy for about 9 seconds per file.
 
-The coordinator keeps running after the work is done so the finished run stays on the dashboard. Ctrl+C stops it, then `make record` saves the run to `data/run.json` for the replay. `make demo` deletes `data/demo/` first, so record a run before starting another.
+The coordinator keeps running after the work is done so the finished run stays on the dashboard. Ctrl+C stops it, then `make demo-save` builds the demo's own index and saves the run to `data/run.json`. Restart `make web` and the search box and the pipeline replay both use that run.
+
+**Why the demo gets its own index:** the website shows a replay of each search, highlighting the files the site's links came from. That's only true if the search answers come from the same run as the replay. Before this, searches came from the sample index and the replay came from the demo run.
+
+`make demo` deletes `data/demo/` (and its index) first, so save a run before starting another. Until the next `make demo-save`, `make web` falls back to the sample index.
 
 ## Running a cluster in Docker
 

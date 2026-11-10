@@ -19,24 +19,24 @@ browser → website (Next.js, :3000) → Go API (:8081) → index shards on disk
 | `GET /stats` | `200` with the index manifest: shards, hash, domain and edge counts, data description |
 | `GET /healthz` | `200 ok` |
 
-Lookup JSON:
+Lookup JSON (`/lookup?domain=github.com&limit=1` on the demo index from `make demo-index`, built from 2 copies of the sample file):
 
 ```json
 {
   "domain": "github.com",
   "score": 58,
   "linkingDomains": 221,
-  "linkingPages": 242,
-  "nofollowPages": 18,
+  "linkingPages": 484,
+  "nofollowPages": 36,
   "backlinks": [
-    {"domain": "mozilla.org", "pages": 4, "nofollowPages": 0,
+    {"domain": "mozilla.org", "pages": 8, "nofollowPages": 0,
      "exampleSource": "https://support.mozilla.org/de/questions/1578885",
      "exampleTarget": "https://github.com/mozilla/kitsune/"}
   ],
-  "source": "Sample: 1 Common Crawl file from CC-MAIN-2026-43 (22,020 pages)",
+  "source": "Demo run: small slices of one Common Crawl file from CC-MAIN-2026-43",
   "originFiles": 2,
-  "origins": [{"file": "demo-1", "pages": 121}, {"file": "demo-2", "pages": 121}],
-  "tookMs": 0.21
+  "origins": [{"file": "demo-1", "pages": 242}, {"file": "demo-2", "pages": 242}],
+  "tookMs": 0.048
 }
 ```
 

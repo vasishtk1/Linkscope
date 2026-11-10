@@ -372,7 +372,7 @@ function NothingYet() {
         <span className="text-zinc-500"># a small, light run on slices of the sample file; this page shows it live</span>
         {"\n"}make demo{"\n\n"}
         <span className="text-zinc-500"># then Ctrl+C, save it, and restart the site to replay it any time</span>
-        {"\n"}make record{"\n"}make web
+        {"\n"}make demo-save{"\n"}make web
       </pre>
     </div>
   );

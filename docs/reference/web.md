@@ -149,7 +149,7 @@ The pipeline page. It picks what to show, in this order:
 1. **A live run**, if the coordinator says files are still waiting or being processed. The scene follows it in real time.
 2. **The run on the coordinator**, once a live run you were watching finishes, so it doesn't jump away. It can be replayed like a saved one.
 3. **The saved run** from `/api/run`. This is what visitors to a hosted site see.
-4. Otherwise, how to make one: `make demo`, `make record`, `make web`.
+4. Otherwise, how to make one: `make demo`, `make demo-save`, `make web`.
 
 When both a saved run and a finished coordinator run exist, a switch above the scene picks between them.
 

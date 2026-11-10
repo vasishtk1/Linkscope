@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt up down clean sample sample-edges sample-scores sample-index web merge pagerank index api loadtest cc-ranks validate demo record
+.PHONY: build test lint fmt up down clean sample sample-edges sample-scores sample-index web merge pagerank index api loadtest cc-ranks validate demo record demo-index demo-save
 
 build:
 	go build -o bin/ ./cmd/...
@@ -39,9 +39,12 @@ sample-index: sample-scores
 	./bin/index -edges data/sample.edges.tsv -scores data/sample.scores.tsv -o data/sample-index \
 		-source "Sample: 1 Common Crawl file from $(CRAWL) (22,020 pages)"
 
-web: sample-index
+# The website serves the demo's index once one exists, so searches match the replay; otherwise the sample index.
+WEB_INDEX ?= $(if $(wildcard data/demo/index/manifest.json),data/demo/index,data/sample-index)
+
+web: build $(if $(filter data/sample-index,$(WEB_INDEX)),sample-index)
 	cd web && npm install
-	./bin/api -index data/sample-index & API=$$!; trap "kill $$API" EXIT; cd web && npm run dev
+	./bin/api -index $(WEB_INDEX) & API=$$!; trap "kill $$API" EXIT; cd web && npm run dev
 
 RESULTS ?= data/results
 
@@ -89,10 +92,18 @@ demo: build
 	for i in $$(seq 1 $(DEMO_WORKERS)); do \
 		./bin/worker -id worker-$$i -source http://127.0.0.1:8090 -out data/demo/results -parsers 1 & pids="$$pids $$!"; \
 	done; \
-	echo "Watch it at http://localhost:3000/pipeline (start the site with 'make web'). When it's done, Ctrl+C, then 'make record' to save it for the replay."; \
+	echo "Watch it at http://localhost:3000/pipeline (start the site with 'make web'). When it's done, Ctrl+C, then 'make demo-save' to build its index and save it for the replay."; \
 	wait
 
 RUN_DB ?= data/demo/jobs.db
 
 record: build
 	./bin/record -db $(RUN_DB) -o data/run.json $(if $(NAME),-name "$(NAME)")
+
+demo-index: build
+	./bin/merge -in data/demo/results -o data/demo/merged.edges.tsv.gz -origins data/demo/merged.origins.tsv.gz
+	./bin/pagerank -in data/demo/merged.edges.tsv.gz -o data/demo/scores.tsv -top 5
+	./bin/index -edges data/demo/merged.edges.tsv.gz -scores data/demo/scores.tsv -origins data/demo/merged.origins.tsv.gz \
+		-o data/demo/index -source "Demo run: small slices of one Common Crawl file from $(CRAWL)"
+
+demo-save: demo-index record
