@@ -172,6 +172,11 @@ The `/pipeline` page shows a run as an animation: files handed from the coordina
 - **A saved run** is that log plus the file list in one JSON file, made by `cmd/record` and served by the lookup API. A hosted site needs no pipeline running to show it, and every number in it was measured during the run. See [record.md](reference/record.md).
 - **The replay** computes each frame from the events before it ([web.md](reference/web.md), `replay.ts`), so pausing, speeding up and jumping around are all exact.
 - **Workers in `/status`:** the coordinator also remembers when it last heard from each worker and which file it's on. A worker silent for longer than a lease is shown as "no contact", the same rule the coordinator uses to give its file to someone else.
+- **Replaying a search:** merge can note which result files each site's links came from (`cmd/merge -origins`), and the index stores that next to each site's backlinks. A lookup returns it, and the website saves each search on your device. On the Pipeline page, picking a search replays the run with that site's files highlighted, its links adding up at Merge, its score at PageRank, and its lookup time at Index. This only makes sense when the index and the recording come from the same run, so `make demo-save` builds both, and `make web` serves the demo's index when there is one. See [merge.md](reference/merge.md#originsgo), [index.md](reference/index.md) and [web.md](reference/web.md).
+
+```
+worker results ──▶ merge -origins ──▶ index (origins per site) ──▶ /lookup ──▶ saved in the browser ──▶ /pipeline?search=site
+```
 
 ## Fault tolerance tests (stage 3)
 

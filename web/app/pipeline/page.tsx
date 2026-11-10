@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Pipeline } from "@/components/pipeline";
 import { SiteHeader } from "@/components/site-header";
@@ -15,7 +16,9 @@ export default function PipelinePage() {
         className="pointer-events-none absolute inset-x-0 top-0 h-[600px] bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.12),transparent_60%)]"
       />
       <SiteHeader active="pipeline" />
-      <Pipeline />
+      <Suspense>
+        <Pipeline />
+      </Suspense>
     </div>
   );
 }

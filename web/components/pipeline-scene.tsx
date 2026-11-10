@@ -1,5 +1,5 @@
-import type { Flight, Frame } from "@/lib/replay";
-import { fileLabel } from "@/lib/replay";
+import type { Flight, Focus, Frame } from "@/lib/replay";
+import { fileLabel, fmt, focusProgress } from "@/lib/replay";
 
 const W = 1000;
 const ROW = 60;
@@ -16,8 +16,8 @@ const MAX_TILES = 72;
 const ease = (p: number) => (p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2);
 const trunc = (s: string, n: number) => (s.length > n ? `…${s.slice(-(n - 1))}` : s);
 
-// PipelineScene draws one frame: the file queue, the coordinator, each worker, and the steps after the workers.
-export function PipelineScene({ frame, total }: { frame: Frame; total: number }) {
+// PipelineScene draws one frame; with a focus, the searched site's files stay blue and everything else fades.
+export function PipelineScene({ frame, total, focus }: { frame: Frame; total: number; focus?: Focus }) {
   const rows = Math.max(frame.workers.length, 3);
   const H = Math.max(400, rows * ROW + 100);
   const cy = H / 2;
@@ -39,6 +39,12 @@ export function PipelineScene({ frame, total }: { frame: Frame; total: number })
   };
 
   const tiles = Math.min(frame.queued, MAX_TILES);
+  const inFocus = (path?: string) => !!focus && !!path && focus.pages.has(fileLabel(path));
+  const dim = (path?: string) => !!focus && !inFocus(path);
+  const progress = focus && focusProgress(focus, frame);
+  const working = focus ? frame.workers.filter((w) => inFocus(w.job?.path)).length : 0;
+  const queuedFocus = focus && progress ? Math.max(0, focus.matched - progress.files - working) : 0;
+  const site = focus && trunc(focus.domain, 20);
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={`${frame.done} of ${total} files done, ${frame.working} being processed`}>
@@ -64,7 +70,7 @@ export function PipelineScene({ frame, total }: { frame: Frame; total: number })
           width={TILE}
           height={TILE}
           rx={2}
-          className="fill-zinc-600"
+          className={i < queuedFocus ? "fill-blue-400" : focus ? "fill-zinc-700" : "fill-zinc-600"}
         />
       ))}
       {frame.queued > MAX_TILES && (
@@ -80,14 +86,15 @@ export function PipelineScene({ frame, total }: { frame: Frame; total: number })
 
       {frame.workers.map((w, i) => {
         const y = wy(i) - 24;
-        const border = w.lost ? "stroke-red-400" : w.job ? "stroke-blue-500" : "stroke-zinc-700";
+        const border = w.lost ? "stroke-red-400" : inFocus(w.job?.path) ? "stroke-blue-300" : w.job ? "stroke-blue-500" : "stroke-zinc-700";
+        const focusPages = inFocus(w.job?.path) ? focus!.pages.get(fileLabel(w.job!.path)) : undefined;
         const status = w.lost ? "no contact" : w.job ? (w.job.attempt > 1 ? `retry, attempt ${w.job.attempt}` : "working") : "idle";
         return (
-          <g key={w.name}>
+          <g key={w.name} opacity={dim(w.job?.path) ? 0.4 : 1}>
             <rect x={WX} y={y} width={WW} height={48} rx={8} className={`fill-zinc-900 ${border}`} strokeWidth={1.5} />
             <text x={WX + 12} y={y + 19} className="fill-zinc-100 font-mono text-[12px]">{trunc(w.name, 18)}</text>
             <text x={WX + WW - 12} y={y + 19} textAnchor="end" className={`text-[11px] ${w.lost ? "fill-red-400" : w.job?.attempt && w.job.attempt > 1 ? "fill-amber-300" : "fill-zinc-500"}`}>
-              {status}
+              {focusPages !== undefined ? `+${fmt(focusPages)} links` : status}
             </text>
             {w.job && (
               <>
@@ -104,14 +111,40 @@ export function PipelineScene({ frame, total }: { frame: Frame; total: number })
         );
       })}
 
-      <Step x={MX} y={merge.y} title="Merge" sub={`${frame.done} of ${total} files in`} lit={frame.done > 0} />
-      <Step x={MX} y={cy - 26} title="PageRank" sub={allIn ? "runs next" : "after merge"} lit={allIn} />
-      <Step x={MX} y={cy + 58} title="Index" sub={allIn ? "then this" : "after PageRank"} lit={allIn} />
+      {focus && progress ? (
+        <>
+          <Step x={MX} y={merge.y} title="Merge" sub={`${fmt(progress.pages)} links to ${site}`} lit={progress.files > 0} />
+          <Step x={MX} y={cy - 26} title="PageRank" sub={allIn ? (focus.score === null ? "no score" : `${site}: ${focus.score} / 100`) : "after merge"} lit={allIn} />
+          <Step x={MX} y={cy + 58} title="Index" sub={allIn ? `your search: ${focus.tookMs.toFixed(2)} ms` : "after PageRank"} lit={allIn} />
+        </>
+      ) : (
+        <>
+          <Step x={MX} y={merge.y} title="Merge" sub={`${frame.done} of ${total} files in`} lit={frame.done > 0} />
+          <Step x={MX} y={cy - 26} title="PageRank" sub={allIn ? "runs next" : "after merge"} lit={allIn} />
+          <Step x={MX} y={cy + 58} title="Index" sub={allIn ? "then this" : "after PageRank"} lit={allIn} />
+        </>
+      )}
 
       {frame.flights.map((fl) => {
         const { x, y } = flightPos(fl);
-        return <rect key={fl.key} x={x} y={y} width={TILE} height={TILE} rx={2} className={fl.failed ? "fill-red-400" : "fill-blue-400"} />;
+        const color = fl.failed ? "fill-red-400" : dim(fl.path) ? "fill-zinc-600" : "fill-blue-400";
+        return <rect key={fl.key} x={x} y={y} width={TILE} height={TILE} rx={2} className={color} />;
       })}
+      {focus &&
+        frame.flights
+          .filter((fl) => fl.to === "merge" && inFocus(fl.path))
+          .map((fl) => (
+            <text
+              key={`pop-${fl.key}`}
+              x={MX + MW / 2}
+              y={merge.y - 8 - Math.min(1, fl.p) * 14}
+              textAnchor="middle"
+              opacity={1 - Math.min(1, fl.p)}
+              className="fill-blue-300 font-mono text-[12px]"
+            >
+              +{fmt(focus.pages.get(fileLabel(fl.path)) ?? 0)}
+            </text>
+          ))}
     </svg>
   );
 }

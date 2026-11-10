@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Pause, Play, RotateCcw } from "lucide-react";
 import type { Pipeline as Live, Recording } from "@/lib/types";
-import { clock, fmt, frameAt, makeRun, type Run } from "@/lib/replay";
+import { clock, fileLabel, fmt, focusProgress, frameAt, makeFocus, makeRun, type Focus, type Run } from "@/lib/replay";
+import { clearSearches, useSearches, type SavedSearch } from "@/lib/searches";
 import { PipelineScene } from "./pipeline-scene";
 
 const FRAME_MS = 1000 / 30;
@@ -85,12 +88,24 @@ export function Pipeline() {
   const { live, checked: liveChecked, sawActive } = useLive();
   const { rec, checked: recChecked } = useRecording();
   const [picked, setChoice] = useState<"saved" | "coordinator" | null>(null);
+  const searches = useSearches();
+  const router = useRouter();
+  const pathname = usePathname();
+  const wanted = useSearchParams().get("search");
+  const selected = searches.find((s) => s.domain === wanted) ?? null;
+  const select = (domain: string | null) =>
+    router.replace(domain ? `${pathname}?search=${encodeURIComponent(domain)}` : pathname, { scroll: false });
 
   const liveActive = !!live && live.data.status.pending + live.data.status.running > 0;
   const liveHasRun = !!live && live.data.events.length > 0;
   // After watching a run live, keep showing that run instead of jumping back to the saved one.
   const choice = picked ?? (sawActive ? "coordinator" : "saved");
-  const source = liveActive ? "live" : choice === "coordinator" && liveHasRun ? "coordinator" : rec ? "saved" : liveHasRun ? "coordinator" : null;
+  // A search's links come from the saved run's index, so a picked search replays the saved run, even during a live one.
+  const source = selected && rec
+    ? "saved"
+    : liveActive
+      ? "live"
+      : choice === "coordinator" && liveHasRun ? "coordinator" : rec ? "saved" : liveHasRun ? "coordinator" : null;
 
   const run = useMemo<Run | null>(() => {
     if ((source === "live" || source === "coordinator") && live) {
@@ -110,6 +125,7 @@ export function Pipeline() {
     return null;
   }, [source, live, rec]);
 
+  const focus = useMemo<Focus | null>(() => (run && selected && source !== "live" ? makeFocus(run, selected) : null), [run, selected, source]);
   const loaded = liveChecked && recChecked;
 
   return (
@@ -122,22 +138,97 @@ export function Pipeline() {
         </p>
       </div>
 
-      {!loaded && <p className="text-sm text-zinc-500">Loading…</p>}
-      {loaded && !run && <NothingYet />}
-      {run && source === "live" && live && <LiveView run={run} receivedAt={live.at} serverNow={Date.parse(live.data.status.now)} />}
-      {run && source !== "live" && (
-        <>
-          <SourceBar
-            run={run}
-            rec={source === "saved" ? rec : null}
-            canSwitch={!!rec && liveHasRun}
-            source={source as "saved" | "coordinator"}
-            onSwitch={setChoice}
-          />
-          <Replay key={`${source}-${run.events.length}`} run={run} />
-        </>
-      )}
+      <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)]">
+        <SearchList searches={searches} selected={selected?.domain ?? null} onSelect={select} />
+        <div className="min-w-0">
+          {!loaded && <p className="text-sm text-zinc-500">Loading…</p>}
+          {loaded && !run && <NothingYet />}
+          {run && source === "live" && live && <LiveView run={run} receivedAt={live.at} serverNow={Date.parse(live.data.status.now)} />}
+          {run && source !== "live" && (
+            <>
+              {selected && focus ? (
+                <FocusBar search={selected} focus={focus} total={run.total} onClear={() => select(null)} />
+              ) : (
+                <SourceBar
+                  run={run}
+                  rec={source === "saved" ? rec : null}
+                  canSwitch={!!rec && liveHasRun}
+                  source={source as "saved" | "coordinator"}
+                  onSwitch={setChoice}
+                />
+              )}
+              <Replay key={`${source}-${run.events.length}-${selected?.domain ?? ""}`} run={run} focus={focus && focus.matched > 0 ? focus : undefined} />
+            </>
+          )}
+        </div>
+      </div>
     </main>
+  );
+}
+
+// SearchList is "Full run" plus every site searched on this device, newest first; a row on phones, a column on wide screens.
+function SearchList({ searches, selected, onSelect }: { searches: SavedSearch[]; selected: string | null; onSelect: (d: string | null) => void }) {
+  const item = (on: boolean) =>
+    `shrink-0 rounded-lg px-3 py-2 text-left text-sm transition ${on ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"}`;
+  return (
+    <aside className="min-w-0">
+      <div className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
+        <button onClick={() => onSelect(null)} className={item(!selected)} aria-pressed={!selected}>
+          Full run
+        </button>
+        <div className="flex shrink-0 items-center justify-between px-3 pt-3 pb-1 text-[11px] font-medium uppercase tracking-widest text-zinc-500 max-lg:hidden">
+          Your searches
+          {searches.length > 0 && (
+            <button onClick={() => { clearSearches(); onSelect(null); }} className="normal-case tracking-normal text-zinc-600 hover:text-zinc-300">
+              Clear
+            </button>
+          )}
+        </div>
+        {searches.map((s) => (
+          <button key={s.domain} onClick={() => onSelect(s.domain)} className={item(s.domain === selected)} aria-pressed={s.domain === selected}>
+            <span className="block max-w-[11rem] truncate font-mono text-[13px]">{s.domain}</span>
+            <span className="block text-[11px] text-zinc-500 max-lg:hidden">
+              {s.originFiles ? `${fmt(s.originFiles)} ${s.originFiles === 1 ? "file" : "files"}` : "no file data"}
+              {s.score !== null && ` · score ${s.score}`}
+            </span>
+          </button>
+        ))}
+      </div>
+      {searches.length === 0 && (
+        <p className="mt-2 px-3 text-xs text-zinc-500 max-lg:hidden">
+          Sites you <Link href="/" className="text-zinc-300 underline-offset-2 hover:underline">search</Link> show up here, on this device, so you can replay how each one was found.
+        </p>
+      )}
+    </aside>
+  );
+}
+
+// FocusBar sits above the scene while a search is picked and says how its files fit into this run.
+function FocusBar({ search, focus, total, onClear }: { search: SavedSearch; focus: Focus; total: number; onClear: () => void }) {
+  const capped = focus.originFiles > focus.stored;
+  return (
+    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div className="text-sm text-zinc-400">
+        <span className="text-zinc-200">Following <span className="font-mono">{search.domain}</span></span>
+        {focus.matched > 0 ? (
+          <span className="text-zinc-500">
+            {" "}· its links were found in {fmt(focus.matched)} of {fmt(total)} files
+          </span>
+        ) : (
+          <div className="mt-1 text-xs text-amber-300/90">
+            This search came from different data than the run saved here, so none of its files are in this replay. Search it again after the site is restarted on this run.
+          </div>
+        )}
+        {capped && focus.matched > 0 && (
+          <div className="mt-1 text-xs text-zinc-500">
+            Showing the {fmt(focus.stored)} files with the most links out of {fmt(focus.originFiles)}.
+          </div>
+        )}
+      </div>
+      <button onClick={onClear} className="self-start rounded-lg border border-zinc-800 px-2.5 py-1 text-xs text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-200">
+        Show full run
+      </button>
+    </div>
   );
 }
 
@@ -171,7 +262,7 @@ function SourceBar({ run, rec, canSwitch, source, onSwitch }: {
 }
 
 // Replay plays a finished run: the clock moves only while playing, so a paused page does no work.
-function Replay({ run }: { run: Run }) {
+function Replay({ run, focus }: { run: Run; focus?: Focus }) {
   const span = Math.max(run.end - run.start, 1);
   const [t, setT] = useState(run.start);
   const [playing, setPlaying] = useState(false);
@@ -213,7 +304,7 @@ function Replay({ run }: { run: Run }) {
   return (
     <div>
       <div className="relative rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-        <PipelineScene frame={frame} total={run.total} />
+        <PipelineScene frame={frame} total={run.total} focus={focus} />
         {!playing && t === run.start && (
           <button
             onClick={toggle}
@@ -255,8 +346,8 @@ function Replay({ run }: { run: Run }) {
         </span>
       </div>
 
-      <Scrubber run={run} t={t} onSeek={(v) => { setPlaying(false); setT(v); }} />
-      <Counters frame={frame} total={run.total} />
+      <Scrubber run={run} t={t} focus={focus} onSeek={(v) => { setPlaying(false); setT(v); }} />
+      <Counters frame={frame} total={run.total} focus={focus} />
     </div>
   );
 }
@@ -293,7 +384,7 @@ function LiveView({ run, receivedAt, serverNow }: { run: Run; receivedAt: number
   );
 }
 
-function Scrubber({ run, t, onSeek }: { run: Run; t: number; onSeek: (t: number) => void }) {
+function Scrubber({ run, t, focus, onSeek }: { run: Run; t: number; focus?: Focus; onSeek: (t: number) => void }) {
   const span = Math.max(run.end - run.start, 1);
   const ref = useRef<HTMLDivElement>(null);
   const lanes = run.workers.length || 1;
@@ -324,7 +415,7 @@ function Scrubber({ run, t, onSeek }: { run: Run; t: number; onSeek: (t: number)
           {run.segments.map((s, i) => (
             <div
               key={i}
-              className={`absolute h-1 rounded-full ${s.outcome === "failed" ? "bg-red-400/80" : "bg-blue-500/50"}`}
+              className={`absolute h-1 rounded-full ${s.outcome === "failed" ? "bg-red-400/80" : focus && !focus.pages.has(fileLabel(s.path)) ? "bg-zinc-700" : "bg-blue-500/50"}`}
               style={{ left: `${pct(s.from)}%`, width: `max(${pct(s.to) - pct(s.from)}%, 2px)`, top: Math.max(0, run.workers.indexOf(s.worker)) * 6 }}
             />
           ))}
@@ -340,8 +431,12 @@ function Scrubber({ run, t, onSeek }: { run: Run; t: number; onSeek: (t: number)
   );
 }
 
-function Counters({ frame, total }: { frame: ReturnType<typeof frameAt>; total: number }) {
+function Counters({ frame, total, focus }: { frame: ReturnType<typeof frameAt>; total: number; focus?: Focus }) {
+  const got = focus && focusProgress(focus, frame);
   const tiles = [
+    ...(focus && got
+      ? [{ label: `Links to ${focus.domain}`, value: `${fmt(got.pages)} / ${fmt(focus.totalPages)}`, hint: `${fmt(got.files)} of ${fmt(focus.matched)} files in` }]
+      : []),
     { label: "Files done", value: `${fmt(frame.done)} / ${fmt(total)}` },
     { label: "Pages read", value: fmt(frame.pages) },
     { label: "Links found", value: fmt(frame.crossLinks), hint: "between different sites" },
@@ -349,10 +444,10 @@ function Counters({ frame, total }: { frame: ReturnType<typeof frameAt>; total: 
     { label: "Failed attempts", value: fmt(frame.failedAttempts), hint: frame.failed ? `${frame.failed} gave up` : "each one retried" },
   ];
   return (
-    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <div className={`mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 ${focus ? "lg:grid-cols-6" : "lg:grid-cols-5"}`}>
       {tiles.map((x) => (
         <div key={x.label} className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3">
-          <div className="text-xs text-zinc-500">{x.label}</div>
+          <div className="truncate text-xs text-zinc-500">{x.label}</div>
           <div className="mt-1 font-mono text-xl text-zinc-100 tabular-nums">{x.value}</div>
           {x.hint && <div className="mt-0.5 text-[11px] text-zinc-600">{x.hint}</div>}
         </div>

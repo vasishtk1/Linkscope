@@ -66,7 +66,7 @@ The saved run the Go API was started with (`cmd/api -run`, see [record.md](recor
 
 ### `pipeline/page.tsx`
 
-The `/pipeline` page: the shared header (with "Pipeline" marked as the current page), the same blue glow as the home page, and the `Pipeline` component. It doesn't use the animated network background, which would compete with the pipeline animation.
+The `/pipeline` page: the shared header (with "Pipeline" marked as the current page), the same blue glow as the home page, and the `Pipeline` component inside `<Suspense>`, because it reads `?search=` from the URL. It doesn't use the animated network background, which would compete with the pipeline animation.
 
 ## lib/
 
@@ -101,6 +101,9 @@ The replay engine. Plain functions with no React, so the same code drives both t
 - **`frameAt(run, t, flightMs)`** answers "what did the pipeline look like at time `t`?" by replaying every event up to `t`: which file each worker holds and how far along it is, which workers went silent ("no contact"), how many files are done, failed or still waiting, and the running totals of pages, links and failed attempts. Events in the last `flightMs` also become **flights**, file tiles moving coordinator → worker (claimed), worker → merge (completed) or worker → queue (failed, expired, released).
 - **Why compute each frame from scratch:** the state at any time depends only on the events before it, so the slider can jump anywhere, backwards included, and always shows exactly what happened. Replaying a few hundred events 30 times a second is cheap.
 - **Progress bars:** in a replay the end of each attempt is known, so a worker's bar is exact. While live, the end isn't known yet, so the bar estimates from the median file time and stops at 95% until the file actually finishes.
+- **`completed` and flight paths:** each frame also lists the files finished so far, and each flight and scrubber segment knows its file, so a search's files can be picked out.
+- **`makeFocus(run, search)`** lays a saved search over a run. It matches the search's origins to the run's files by name (`demo-1` from the index is the job `demo-1.warc.wat.gz`). `matched` is how many of the run's files had links to the site. It's 0 when the search came from different data than the saved run, and the page says so instead of highlighting nothing.
+- **`focusProgress(focus, frame)`** counts the focused files finished by this frame and the linking pages they've added. At the end of a replay it equals the site's linking pages: on the saved demo run, github.com's two files add up to its 484 pages.
 - **`fileLabel`, `fmt`, `clock`:** short file names, numbers with commas, and `m:ss` times.
 
 ### `searches.ts`
@@ -172,6 +175,15 @@ The pipeline page. It picks what to show, in this order:
 
 When both a saved run and a finished coordinator run exist, a switch above the scene picks between them.
 
+**Your searches.** On the left (a row of buttons on phones) are "Full run" and every site searched on this device (`useSearches`), newest first, with its file count and score. "Clear" empties the list. Picking one puts `?search=<site>` in the URL and replays the saved run focused on that site:
+
+- **`FocusBar`** replaces the source line: "Following github.com · its links were found in 2 of 2 files", a note if the index capped the list (it keeps the 200 files with the most links), or a warning if the search came from different data. "Show full run" goes back.
+- **In the scene** the site's files stay blue and the rest fade (see `pipeline-scene.tsx`). The scrubber greys out bars for other files.
+- **`Counters`** gets an extra first tile: links to the site so far out of its total, and how many of its files are in.
+- A picked search always replays the saved run, even while a live run is going, because the search's answer came from the saved run's index.
+
+The page reads `?search=` with `useSearchParams`, so `pipeline/page.tsx` wraps it in `<Suspense>`, which Next.js requires for that.
+
 - **`useLive`** polls `/api/pipeline` every second, or every 4 seconds while no coordinator answers, so a new run appears on its own. It stops while the tab is hidden, never lets two requests overlap, and remembers if it ever saw a run in progress.
 - **`useRecording`** fetches the saved run once.
 - **`Replay`** holds the replay clock `t`. **Play** moves it forward 30 times a second; **Pause** stops the animation loop completely, so a paused page does no work. The page opens paused at the start with a big Play button over the scene. Speeds: *Fit to 30s* (the default, so a 3-second demo and a 2-minute run both take 30s), 1×, 10× and 60×. File tiles take 0.7s of screen time to move, whatever the speed. Hiding the tab pauses it.
@@ -191,6 +203,17 @@ Draws one frame as SVG, left to right:
 | Workers | One box per worker: its name, the file it's on, a progress bar, and its state (working, idle, retry with the attempt number, or "no contact" with a red border) |
 | Merge, PageRank, Index | Merge counts files as they arrive. PageRank and Index light up once every file is in, labeled as the steps that run next; their timings aren't in the recording, so no numbers are shown for them |
 | Flying tiles | Files moving between boxes along straight lines with ease-in-out; red when a failed file goes back to the queue |
+
+**With a search picked** (`focus`):
+
+| Part | Shows |
+|---|---|
+| Waiting files | The site's files still waiting are blue at the front of the queue, the rest dark. Tiles stand for counts, not exact queue positions |
+| Workers | A worker holding one of the site's files gets a bright border and "+N links" instead of its state; the others fade to 40% |
+| Flying tiles | The site's files blue, the rest grey. When one reaches Merge, a "+N" floats up and fades |
+| Merge | Links to the site merged so far |
+| PageRank | The site's score once every file is in |
+| Index | How long your search's lookup took inside the API (`tookMs`, measured when you searched) |
 
 The SVG has a fixed 1000-wide coordinate system and scales to the page width. Its height grows with the number of workers.
 
