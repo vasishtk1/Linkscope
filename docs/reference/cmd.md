@@ -110,14 +110,15 @@ make merge                                              # data/results → data/
 |---|---|---|
 | `-in` | `data/results` | Folder of `*.edges.tsv.gz` result files |
 | `-o` | `data/merged.edges.tsv.gz` | Output file (gzipped if it ends in `.gz`) |
+| `-origins` | none | Also write which result files each site's links came from (see [merge.md](merge.md#originsgo)). `cmd/index -origins` stores them in the index |
 
 ### `main()`
 
 Parses flags, rejects extra arguments, and calls `run`.
 
-### `run(in, out string) error`
+### `run(in, out, originsPath string) error`
 
-Lists the result files, merges them, writes the output, and prints a report: files merged, edges read, merged edges, unique domains, total linking pages, and time. It fails if the folder has no result files, so a typo in `-in` doesn't quietly produce an empty graph.
+Lists the result files, merges them (with origins when `originsPath` is set), writes the output, and prints a report: files merged, edges read, merged edges, unique domains, total linking pages, and time. It fails if the folder has no result files, so a typo in `-in` doesn't quietly produce an empty graph.
 
 ## cmd/pagerank
 
