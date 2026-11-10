@@ -2,6 +2,7 @@ package index
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/vasishtk1/Linkscope/internal/links"
+	"github.com/vasishtk1/Linkscope/internal/merge"
 )
 
 func edge(src, dst string, pages, nofollow int) links.Edge {
@@ -190,4 +192,55 @@ func TestNormalize(t *testing.T) {
 			t.Errorf("Normalize(%q) = %q, want %q", in, got, want)
 		}
 	}
+}
+
+func TestOriginsAreStoredAndCapped(t *testing.T) {
+	many := make([]merge.Origin, maxOrigins+5)
+	for i := range many {
+		many[i] = merge.Origin{File: fmt.Sprintf("x-%05d", i), Pages: len(many) - i}
+	}
+	dir := filepath.Join(t.TempDir(), "index")
+	og := map[string][]merge.Origin{"github.com": many, "go.dev": {{File: "a:b", Pages: 4}}}
+	if _, err := Build(dir, testEdges, testScores, Options{Shards: 3, Origins: og}); err != nil {
+		t.Fatal(err)
+	}
+	ix, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ix.Close()
+
+	l, err := ix.Lookup("github.com", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.OriginFiles != maxOrigins+5 || !reflect.DeepEqual(l.Origins, many[:maxOrigins]) {
+		t.Fatalf("got %d files, %d stored", l.OriginFiles, len(l.Origins))
+	}
+	if bl, _ := ix.Backlinks(mustFind(t, ix, "github.com"), 0); len(bl) != 4 {
+		t.Fatalf("origins broke the backlink list: %d", len(bl))
+	}
+	l, _ = ix.Lookup("go.dev", 0)
+	if !reflect.DeepEqual(l.Origins, og["go.dev"]) {
+		t.Fatalf("file name with a colon: %+v", l.Origins)
+	}
+}
+
+func TestDirectoryRowsWithoutOrigins(t *testing.T) {
+	e, err := parseEntry("github.com\t100\t3\t64\t14\t0\t90", 2, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.LinkingPages != 64 || e.length != 90 || e.OriginFiles != 0 || e.olength != 0 {
+		t.Fatalf("got %+v", e)
+	}
+}
+
+func mustFind(t *testing.T, ix *Index, d string) Entry {
+	t.Helper()
+	e, ok := ix.Find(d)
+	if !ok {
+		t.Fatalf("%s not found", d)
+	}
+	return e
 }

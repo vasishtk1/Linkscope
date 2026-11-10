@@ -17,18 +17,19 @@ func main() {
 	out := flag.String("o", "data/index", "index folder to write")
 	shards := flag.Int("shards", 8, "number of shard files")
 	source := flag.String("source", "", "description of the data, shown on the website")
+	originsPath := flag.String("origins", "", "which files each site's links came from, from cmd/merge -origins (optional)")
 	flag.Parse()
 	if flag.NArg() != 0 {
 		flag.Usage()
 		os.Exit(2)
 	}
-	if err := run(*edgesPath, *scoresPath, *out, *shards, *source); err != nil {
+	if err := run(*edgesPath, *scoresPath, *out, *shards, *source, *originsPath); err != nil {
 		fmt.Fprintln(os.Stderr, "index:", err)
 		os.Exit(1)
 	}
 }
 
-func run(edgesPath, scoresPath, out string, shards int, source string) error {
+func run(edgesPath, scoresPath, out string, shards int, source, originsPath string) error {
 	start := time.Now()
 	g, _, err := merge.Files([]string{edgesPath})
 	if err != nil {
@@ -38,7 +39,13 @@ func run(edgesPath, scoresPath, out string, shards int, source string) error {
 	if err != nil {
 		return err
 	}
-	m, err := index.Build(out, g.Edges(), scores, index.Options{Shards: shards, Source: source})
+	var origins map[string][]merge.Origin
+	if originsPath != "" {
+		if origins, err = merge.ReadOrigins(originsPath); err != nil {
+			return fmt.Errorf("%s: %w", originsPath, err)
+		}
+	}
+	m, err := index.Build(out, g.Edges(), scores, index.Options{Shards: shards, Source: source, Origins: origins})
 	if err != nil {
 		return err
 	}
@@ -51,6 +58,9 @@ func run(edgesPath, scoresPath, out string, shards int, source string) error {
 	fmt.Printf("edges:   %d\n", m.Edges)
 	fmt.Printf("domains: %d (%d with scores)\n", m.Domains, len(scores))
 	fmt.Printf("shards:  %d, %.1f MB total\n", m.Shards, float64(size)/1e6)
+	if origins != nil {
+		fmt.Printf("origins: %d sites\n", len(origins))
+	}
 	fmt.Printf("time:    %.2fs\n", time.Since(start).Seconds())
 	fmt.Printf("wrote %s\n", out)
 	return nil

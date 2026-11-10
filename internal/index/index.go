@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/vasishtk1/Linkscope/internal/merge"
 )
 
 type Backlink struct {
@@ -28,9 +30,11 @@ type Entry struct {
 	LinkingDomains int
 	LinkingPages   int
 	NofollowPages  int
+	OriginFiles    int
 	shard          int
 	offset         int64
 	length         int64
+	olength        int64
 }
 
 type shard struct {
@@ -118,13 +122,14 @@ func readDirectory(f *os.File, n int) ([]Entry, error) {
 	return entries, sc.Err()
 }
 
+// parseEntry reads one directory row; indexes built before origins existed have 7 fields instead of 9.
 func parseEntry(line string, n int, dataEnd int64) (Entry, error) {
 	f := strings.Split(line, "\t")
-	if len(f) != 7 || f[0] == "" {
-		return Entry{}, fmt.Errorf("want 7 fields, got %d", len(f))
+	if (len(f) != 7 && len(f) != 9) || f[0] == "" {
+		return Entry{}, fmt.Errorf("want 7 or 9 fields, got %d", len(f))
 	}
-	var nums [6]int64
-	for i := range nums {
+	var nums [8]int64
+	for i := range len(f) - 1 {
 		v, err := strconv.ParseInt(f[i+1], 10, 64)
 		if err != nil {
 			return Entry{}, err
@@ -134,8 +139,9 @@ func parseEntry(line string, n int, dataEnd int64) (Entry, error) {
 	e := Entry{
 		Domain: f[0], Score: int(nums[0]), LinkingDomains: int(nums[1]), LinkingPages: int(nums[2]),
 		NofollowPages: int(nums[3]), shard: n, offset: nums[4], length: nums[5],
+		OriginFiles: int(nums[6]), olength: nums[7],
 	}
-	if e.offset < 0 || e.length < 0 || e.offset+e.length > dataEnd {
+	if e.offset < 0 || e.length < 0 || e.olength < 0 || e.offset+e.length+e.olength > dataEnd {
 		return Entry{}, errors.New("backlink range outside the data section")
 	}
 	return e, nil
@@ -187,6 +193,28 @@ func (ix *Index) Backlinks(e Entry, limit int) ([]Backlink, error) {
 		}
 		out = append(out, b)
 		rest = after
+	}
+	return out, nil
+}
+
+// Origins reads which result files had links to the domain, most linking pages first; empty if the index has none.
+func (ix *Index) Origins(e Entry) ([]merge.Origin, error) {
+	if e.olength == 0 {
+		return nil, nil
+	}
+	buf := make([]byte, e.olength)
+	if _, err := ix.shards[e.shard].f.ReadAt(buf, e.offset+e.length); err != nil {
+		return nil, err
+	}
+	fields := strings.Split(strings.TrimSuffix(string(buf), "\n"), "\t")
+	out := make([]merge.Origin, 0, len(fields))
+	for _, f := range fields {
+		i := strings.LastIndexByte(f, ':')
+		pages, err := strconv.Atoi(f[i+1:])
+		if i <= 0 || err != nil {
+			return nil, fmt.Errorf("%s: bad origin %q", e.Domain, f)
+		}
+		out = append(out, merge.Origin{File: f[:i], Pages: pages})
 	}
 	return out, nil
 }

@@ -197,14 +197,15 @@ make sample-index                                  # the sample file → data/sa
 | `-o` | `data/index` | Index folder (replaced if it exists) |
 | `-shards` | `8` | Number of shard files |
 | `-source` | none | Description of the data, shown on the website |
+| `-origins` | none | Origins file from `cmd/merge -origins`; stored next to each site's backlinks |
 
 ### `main()`
 
 Parses flags, rejects extra arguments, and calls `run`.
 
-### `run(edgesPath, scoresPath, out string, shards int, source string) error`
+### `run(edgesPath, scoresPath, out string, shards int, source, originsPath string) error`
 
-Loads the edges (reusing `merge.Files`, which handles gzip), reads the scores, calls `index.Build`, and prints the edge and domain counts, total shard size, and time.
+Loads the edges (reusing `merge.Files`, which handles gzip), reads the scores and origins (if given), calls `index.Build`, and prints the edge and domain counts, total shard size, and time.
 
 ### `readScores(path string) (map[string]int, error)`
 

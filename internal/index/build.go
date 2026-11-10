@@ -10,8 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/vasishtk1/Linkscope/internal/links"
+	"github.com/vasishtk1/Linkscope/internal/merge"
 )
 
 const (
@@ -19,6 +21,7 @@ const (
 	magic        = "LSIDX001"
 	footerSize   = 16
 	noScore      = -1
+	maxOrigins   = 200
 )
 
 type Manifest struct {
@@ -30,8 +33,9 @@ type Manifest struct {
 }
 
 type Options struct {
-	Shards int
-	Source string
+	Shards  int
+	Source  string
+	Origins map[string][]merge.Origin
 }
 
 // ShardOf picks which shard a domain lives in: FNV-1a hash of the name, modulo the shard count.
@@ -80,7 +84,7 @@ func Build(dir string, edges []links.Edge, scores map[string]int, o Options) (Ma
 
 	for i, domains := range perShard {
 		sort.Strings(domains)
-		if err := writeShard(filepath.Join(tmp, shardName(i)), domains, byDst, scores); err != nil {
+		if err := writeShard(filepath.Join(tmp, shardName(i)), domains, byDst, scores, o.Origins); err != nil {
 			return Manifest{}, err
 		}
 	}
@@ -98,8 +102,8 @@ func Build(dir string, edges []links.Edge, scores map[string]int, o Options) (Ma
 	return m, os.Rename(tmp, dir)
 }
 
-// writeShard writes each domain's backlinks, then the directory that says where each list starts, then the footer.
-func writeShard(path string, domains []string, byDst map[string][]Backlink, scores map[string]int) error {
+// writeShard writes each domain's backlinks and origins, then the directory that says where each list starts, then the footer.
+func writeShard(path string, domains []string, byDst map[string][]Backlink, scores map[string]int, origins map[string][]merge.Origin) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -121,11 +125,17 @@ func writeShard(path string, domains []string, byDst map[string][]Backlink, scor
 			pos += int64(n)
 		}
 		e.length = pos - e.offset
+		if og := origins[d]; len(og) > 0 {
+			e.OriginFiles = len(og)
+			n, _ := w.WriteString(originsLine(og[:min(len(og), maxOrigins)]))
+			e.olength = int64(n)
+			pos += int64(n)
+		}
 		dirRows = append(dirRows, e)
 	}
 	dirOffset := pos
 	for _, e := range dirRows {
-		fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%d\t%d\t%d\n", e.Domain, e.Score, e.LinkingDomains, e.LinkingPages, e.NofollowPages, e.offset, e.length)
+		fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", e.Domain, e.Score, e.LinkingDomains, e.LinkingPages, e.NofollowPages, e.offset, e.length, e.OriginFiles, e.olength)
 	}
 	var footer [footerSize]byte
 	binary.BigEndian.PutUint64(footer[:8], uint64(dirOffset))
@@ -136,6 +146,19 @@ func writeShard(path string, domains []string, byDst map[string][]Backlink, scor
 		return err
 	}
 	return f.Close()
+}
+
+// originsLine packs a domain's origins into one line: file:pages pairs separated by tabs.
+func originsLine(og []merge.Origin) string {
+	var b strings.Builder
+	for i, o := range og {
+		if i > 0 {
+			b.WriteByte('\t')
+		}
+		fmt.Fprintf(&b, "%s:%d", o.File, o.Pages)
+	}
+	b.WriteByte('\n')
+	return b.String()
 }
 
 // sortBacklinks orders by linking pages, most first, then by domain name so the order is always the same.

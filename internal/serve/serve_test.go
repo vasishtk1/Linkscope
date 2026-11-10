@@ -10,6 +10,7 @@ import (
 
 	"github.com/vasishtk1/Linkscope/internal/index"
 	"github.com/vasishtk1/Linkscope/internal/links"
+	"github.com/vasishtk1/Linkscope/internal/merge"
 	"github.com/vasishtk1/Linkscope/internal/record"
 )
 
@@ -23,7 +24,9 @@ func newServerWithRun(t *testing.T, run *record.Recording) *httptest.Server {
 		{Src: "github.com", Dst: "go.dev", Pages: 2, ExampleSrc: "https://github.com/", ExampleDst: "https://go.dev/dl"},
 	}
 	dir := filepath.Join(t.TempDir(), "index")
-	if _, err := index.Build(dir, edges, map[string]int{"github.com": 100}, index.Options{Shards: 4, Source: "test"}); err != nil {
+	if _, err := index.Build(dir, edges, map[string]int{"github.com": 100}, index.Options{Shards: 4, Source: "test", Origins: map[string][]merge.Origin{
+		"github.com": {{File: "x-00001", Pages: 30}, {File: "x-00000", Pages: 12}},
+	}}); err != nil {
 		t.Fatal(err)
 	}
 	ix, err := index.Open(dir)
@@ -59,6 +62,9 @@ func TestLookup(t *testing.T) {
 	if got.Domain != "github.com" || *got.Score != 100 || got.LinkingDomains != 2 || got.LinkingPages != 42 ||
 		len(got.Backlinks) != 2 || got.Backlinks[0].Domain != "go.dev" || got.Source != "test" {
 		t.Fatalf("got %+v", got)
+	}
+	if got.OriginFiles != 2 || len(got.Origins) != 2 || got.Origins[0] != (merge.Origin{File: "x-00001", Pages: 30}) || got.TookMs < 0 {
+		t.Fatalf("origins %d %+v, took %v", got.OriginFiles, got.Origins, got.TookMs)
 	}
 }
 

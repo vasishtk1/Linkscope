@@ -3,16 +3,21 @@ package index
 import (
 	"regexp"
 	"strings"
+
+	"github.com/vasishtk1/Linkscope/internal/merge"
 )
 
 type Lookup struct {
-	Domain         string     `json:"domain"`
-	Score          *int       `json:"score"`
-	LinkingDomains int        `json:"linkingDomains"`
-	LinkingPages   int        `json:"linkingPages"`
-	NofollowPages  int        `json:"nofollowPages"`
-	Backlinks      []Backlink `json:"backlinks"`
-	Source         string     `json:"source"`
+	Domain         string         `json:"domain"`
+	Score          *int           `json:"score"`
+	LinkingDomains int            `json:"linkingDomains"`
+	LinkingPages   int            `json:"linkingPages"`
+	NofollowPages  int            `json:"nofollowPages"`
+	Backlinks      []Backlink     `json:"backlinks"`
+	Source         string         `json:"source"`
+	OriginFiles    int            `json:"originFiles,omitempty"`
+	Origins        []merge.Origin `json:"origins,omitempty"`
+	TookMs         float64        `json:"tookMs"`
 }
 
 var scheme = regexp.MustCompile(`^[a-z][a-z0-9+.-]*://`)
@@ -54,9 +59,14 @@ func (ix *Index) Lookup(input string, limit int) (*Lookup, error) {
 	if err != nil {
 		return nil, err
 	}
+	og, err := ix.Origins(e)
+	if err != nil {
+		return nil, err
+	}
 	l := &Lookup{
 		Domain: e.Domain, LinkingDomains: e.LinkingDomains, LinkingPages: e.LinkingPages,
 		NofollowPages: e.NofollowPages, Backlinks: bl, Source: ix.m.Source,
+		OriginFiles: e.OriginFiles, Origins: og,
 	}
 	if e.Score != noScore {
 		l.Score = &e.Score

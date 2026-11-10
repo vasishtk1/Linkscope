@@ -33,11 +33,14 @@ Lookup JSON:
      "exampleSource": "https://support.mozilla.org/de/questions/1578885",
      "exampleTarget": "https://github.com/mozilla/kitsune/"}
   ],
-  "source": "Sample: 1 Common Crawl file from CC-MAIN-2026-43 (22,020 pages)"
+  "source": "Sample: 1 Common Crawl file from CC-MAIN-2026-43 (22,020 pages)",
+  "originFiles": 2,
+  "origins": [{"file": "demo-1", "pages": 121}, {"file": "demo-2", "pages": 121}],
+  "tookMs": 0.21
 }
 ```
 
-`score` is `null` when the index was built without scores. The totals (`linkingDomains`, `linkingPages`, `nofollowPages`) always count every backlink, even when `limit` cuts the list short.
+`score` is `null` when the index was built without scores. `originFiles` and `origins` (which files the links came from, see [index.md](index.md)) are left out when the index has none. `tookMs` is how long the lookup took inside the API, measured around `ix.Lookup`; the website shows it in the search replay. The totals (`linkingDomains`, `linkingPages`, `nofollowPages`) always count every backlink, even when `limit` cuts the list short.
 
 Network JSON (`/network?n=3`):
 

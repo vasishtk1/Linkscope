@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/vasishtk1/Linkscope/internal/index"
 	"github.com/vasishtk1/Linkscope/internal/record"
@@ -29,6 +30,7 @@ func Handler(ix *index.Index, run *record.Recording) http.Handler {
 			writeJSON(w, http.StatusBadRequest, errorBody("limit must be a whole number, 0 or more"))
 			return
 		}
+		start := time.Now()
 		res, err := ix.Lookup(q, limit)
 		if err != nil {
 			log.Printf("lookup %q: %v", q, err)
@@ -39,6 +41,7 @@ func Handler(ix *index.Index, run *record.Recording) http.Handler {
 			writeJSON(w, http.StatusNotFound, errorBody("no backlinks found"))
 			return
 		}
+		res.TookMs = float64(time.Since(start).Microseconds()) / 1000
 		writeJSON(w, http.StatusOK, res)
 	})
 	mux.HandleFunc("GET /known", func(w http.ResponseWriter, r *http.Request) {
