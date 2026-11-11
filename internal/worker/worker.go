@@ -231,7 +231,12 @@ func (w *Worker) attempt(ctx context.Context, url, watPath string) (jobs.Result,
 		return jobs.Result{}, fmt.Errorf("extract: %w", err)
 	}
 	edges := g.Edges()
-	if err := writeResult(filepath.Join(w.cfg.OutDir, ResultName(watPath)), edges); err != nil {
+	pages := g.PageLinks()
+	// Pages go first: the edges file appearing is what marks the job's output as complete.
+	if err := writeResult(filepath.Join(w.cfg.OutDir, PagesName(watPath)), func(out io.Writer) error { return links.WritePagesTSV(out, pages) }); err != nil {
+		return jobs.Result{}, fmt.Errorf("write pages: %w", err)
+	}
+	if err := writeResult(filepath.Join(w.cfg.OutDir, ResultName(watPath)), func(out io.Writer) error { return links.WriteTSV(out, edges) }); err != nil {
 		return jobs.Result{}, fmt.Errorf("write result: %w", err)
 	}
 	return jobs.Result{Pages: stats.PagesUsed, CrossLinks: stats.CrossLinks, Edges: len(edges)}, nil
@@ -326,8 +331,13 @@ func ResultName(watPath string) string {
 	return strings.TrimSuffix(path.Base(watPath), ".warc.wat.gz") + ".edges.tsv.gz"
 }
 
-// writeResult writes to a temp file and renames it into place, so readers never see a partial file.
-func writeResult(dst string, edges []links.Edge) error {
+// PagesName is the page-level file written next to the result, e.g. X-00042.pages.tsv.gz.
+func PagesName(watPath string) string {
+	return strings.TrimSuffix(path.Base(watPath), ".warc.wat.gz") + ".pages.tsv.gz"
+}
+
+// writeResult writes gzipped output to a temp file and renames it into place, so readers never see a partial file.
+func writeResult(dst string, write func(io.Writer) error) error {
 	dir := filepath.Dir(dst)
 	tmp, err := os.CreateTemp(dir, filepath.Base(dst)+".tmp-*")
 	if err != nil {
@@ -336,7 +346,7 @@ func writeResult(dst string, edges []links.Edge) error {
 	defer os.Remove(tmp.Name())
 
 	gz := gzip.NewWriter(tmp)
-	if err := links.WriteTSV(gz, edges); err != nil {
+	if err := write(gz); err != nil {
 		tmp.Close()
 		return err
 	}

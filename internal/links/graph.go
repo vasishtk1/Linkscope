@@ -23,14 +23,16 @@ type edgeKey struct{ src, dst string }
 
 type Graph struct {
 	edges map[edgeKey]*Edge
+	pages map[pageKey]*PageLink
 }
 
 func NewGraph() *Graph {
-	return &Graph{edges: map[edgeKey]*Edge{}}
+	return &Graph{edges: map[edgeKey]*Edge{}, pages: map[pageKey]*PageLink{}}
 }
 
-// Add counts each page at most once per target domain, no matter how many links it has to it.
+// Add counts each page at most once per target domain, and at most once per exact target page.
 func (g *Graph) Add(o Outlinks) {
+	g.addPages(o)
 	type pageLink struct {
 		followed bool
 		example  string

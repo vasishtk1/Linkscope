@@ -97,7 +97,9 @@ Starting over means downloading the whole file again. Resuming halfway isn't pos
 
 ### `(*Worker) attempt(ctx, url, watPath) (jobs.Result, error)`
 
-One try: download, then extract, then write the result, returning the counts. The download is **streamed straight into the extractor**, so nothing is saved to disk except the final result.
+One try: download, then extract, then write the results, returning the counts. The download is **streamed straight into the extractor**, so nothing is saved to disk except the final results.
+
+It writes two files: the page-level links (`PagesName`) first, then the domain edges (`ResultName`). **Why that order:** merge looks for `*.edges.tsv.gz` files, so the edges file appearing is what says "this job's output is complete". If a crash hits between the two writes, there's a pages file but no edges file, the job gets redone, and both are rewritten.
 
 ### `downloadError`
 
@@ -127,15 +129,19 @@ Wraps the download body and cancels it if it goes silent.
 
 Maps a WAT path to its result file name: `.../CC-MAIN-...-00042.warc.wat.gz` becomes `CC-MAIN-...-00042.edges.tsv.gz`. Each job always writes to the same file, which is what makes re-running a job harmless.
 
-### `writeResult(dst string, edges []links.Edge) error`
+### `PagesName(watPath string) string`
 
-Writes the edges as gzipped TSV, safely:
+The page-level file written next to the result: `CC-MAIN-...-00042.pages.tsv.gz`. Its rows come from `links.WritePagesTSV`.
+
+### `writeResult(dst string, write func(io.Writer) error) error`
+
+Writes gzipped output (edges or pages, whatever `write` produces) safely:
 1. Write to a temp file in the same folder, with a unique random suffix so two attempts of the same job never write into the same temp file
 2. `Sync`: force the bytes onto the disk
 3. `Rename` the temp file to the final name. On the same disk this is atomic: other programs see either the old file or the complete new one, never half a file
 4. Sync the folder, so the rename itself survives a power cut
 
-If anything fails, the deferred `os.Remove` deletes the temp file, so crashes don't leave junk behind. A test checks that the output folder holds exactly one file per job.
+If anything fails, the deferred `os.Remove` deletes the temp file, so crashes don't leave junk behind. A test checks that the output folder holds exactly two files per job (edges and pages) and nothing else.
 
 Gzip cuts each result from ~21 MB to a few MB. Go's gzip writer puts no timestamp in the header, so the same edges always produce byte-identical files, which Stage 3 relies on.
 
@@ -171,7 +177,7 @@ End-to-end tests with a real coordinator and job database, real workers, and a f
 
 | Test | What it proves |
 |---|---|
-| `TestClusterProcessesEveryFileExactlyOnce` | 4 workers, 12 files: every job done, every file downloaded once, every result byte-identical to running the extractor directly, no leftover temp files |
+| `TestClusterProcessesEveryFileExactlyOnce` | 4 workers, 12 files: every job done, every file downloaded once, every edges and pages file byte-identical to running the extractor directly, no leftover temp files |
 | `TestFlakyDownloadIsRetried` | Two `503`s, then success, and the job still completes |
 | `TestBusyServerGetsLongerWaits` | Two `503`s (and separately two `429`s) use the long, jittered busy waits, and the job still completes |
 | `TestOtherServerErrorsKeepShortWaits` | Two `500`s retry quickly, without the long busy wait |

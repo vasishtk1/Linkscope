@@ -65,7 +65,7 @@ A link relationship from one domain to another.
 
 ### `Graph`
 
-A map from `(src, dst)` to `Edge`.
+A map from `(src, dst)` to `Edge`, plus a second map from `(exact page, src)` to `PageLink` (see `pages.go`).
 
 ### `NewGraph() *Graph`
 
@@ -78,6 +78,7 @@ Adds one page's links.
 - **Counts each page once per target domain.** A page with 50 links to `facebook.com` (a footer repeated on every page, say) counts as 1. Counting raw links would let navigation menus and footers drown out real editorial links.
 - A page counts as nofollow for a domain only if **every** link from it to that domain is nofollow.
 - **Examples are picked as the smallest URL**, alphabetically, not the first one seen.
+- Also records page-level links with `addPages` (see `pages.go`).
 
 **Why "smallest" instead of "first":** the result must be identical no matter what order pages arrive in. Pages arrive in a different order every run when several goroutines parse in parallel, and in a different order again when the distributed workers' outputs are merged in Stage 2. Choosing the minimum makes `Add` order-independent, the same way `+` is. Stage 3's crash test relies on this: a run with crashes must produce byte-identical output to a clean run.
 
@@ -116,3 +117,56 @@ Reads a file written by `WriteTSV` and calls `fn` once per edge, in file order.
 ### `parseEdge(line string) (Edge, error)`
 
 Splits one TSV line into an `Edge` and runs the checks above.
+
+## pages.go
+
+Page-level links: not just "site A links to site B", but "site A links to **this exact page** on site B". The domain graph keeps only one example URL per pair, which isn't enough to say which of a site's pages get linked. Lost backlink recovery (the planned PR agent) needs exactly that: a page that's now broken but still gets links.
+
+### `PageLink`
+
+| Field | Meaning |
+|---|---|
+| `Dst` | The linked-to site (registered domain), e.g. `nytimes.com` |
+| `Page` | The exact page, from `PageKey`, e.g. `nytimes.com/games/wordle` |
+| `Src` | The linking site |
+| `Pages` | How many pages on `Src` link to `Page` |
+| `NofollowPages` | How many of those link to it only with nofollow links |
+
+### `PageKey(raw string) (string, bool)`
+
+Turns a link target into the page it points at: host and path, without the scheme, a leading `www.`, the `?query` or the `#fragment`. Examples: `https://www.Example.com/About/?ref=x#top` becomes `example.com/About`; `http://example.com` becomes `example.com/`.
+
+- **Why drop the query:** most query strings on links are tracking tags (`?utm_source=...`, `?ref=...`), so keeping them would split one page into many. The cost is that the rare site that uses queries for real pages (`/item?id=5`) gets those merged.
+- **Why drop `http`/`https` and `www.`:** they almost always serve the same page. The host is lowercased (hosts aren't case-sensitive) but the path isn't (paths can be).
+- **Why keep subdomains:** `blog.example.com/post` and `example.com/post` are different pages.
+- A trailing `/` is removed except on the home page, so `/post/` and `/post` count as one.
+- The path stays percent-escaped (`EscapedPath`), so a page key can never contain a tab or newline and break the TSV.
+
+### `(*Graph) addPages(o Outlinks)`
+
+Called by `Add`. Counts each source page **once per exact target page**, the same rule `Add` uses per domain: a page that links to `b.com/x` three times (with different tracking tags, say) counts as 1. A page counts as nofollow for a target page only if every link from it to that page is nofollow.
+
+### `(*Graph) PageLinks() []PageLink`
+
+All page links, sorted by `Dst`, then `Page`, then `Src`, so the output is identical every run.
+
+### `WritePagesTSV(w io.Writer, pl []PageLink) error`
+
+Writes page links as TSV with the header `dst	page	src	pages	nofollow_pages`.
+
+### `ReadPagesTSV(r io.Reader, fn func(PageLink) error) error`
+
+Reads a file written by `WritePagesTSV`, calling `fn` per row. Like `ReadTSV`, it checks the header and gives line numbers, and rejects rows without 5 fields, empty fields, page counts below 1, and nofollow counts out of range.
+
+### `parsePageLink(line string) (PageLink, error)`
+
+Splits one row and runs those checks.
+
+### Tests (`pages_test.go`)
+
+| Test | What it proves |
+|---|---|
+| `TestPageKey` | Scheme, `www.`, query, fragment, trailing slash and a trailing dot on the host are dropped; subdomains and escaping are kept; links without a host are rejected |
+| `TestPageLinksCountEachSourcePageOncePerTargetPage` | Two links to the same page with different tracking tags count once; nofollow is per page; output is sorted |
+| `TestPagesTSVRoundTrip` | Writing then reading gives back the same rows |
+| `TestReadPagesTSVRejectsBadRows` | Empty file, wrong header, bad counts and missing fields all fail |

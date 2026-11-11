@@ -168,6 +168,19 @@ func expected(t *testing.T, file []byte) []byte {
 	return buf.Bytes()
 }
 
+func expectedPages(t *testing.T, file []byte) []byte {
+	t.Helper()
+	g, _, err := extract.Run(bytes.NewReader(file), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := links.WritePagesTSV(&buf, g.PageLinks()); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
 func readResult(t *testing.T, path string) []byte {
 	t.Helper()
 	f, err := os.Open(path)
@@ -199,13 +212,17 @@ func TestClusterProcessesEveryFileExactlyOnce(t *testing.T) {
 		if !bytes.Equal(got, expected(t, c.src.files[p])) {
 			t.Errorf("%s: result differs from direct extraction", p)
 		}
+		pages := readResult(t, filepath.Join(c.out, worker.PagesName(p)))
+		if !bytes.Equal(pages, expectedPages(t, c.src.files[p])) {
+			t.Errorf("%s: pages file differs from direct extraction", p)
+		}
 		if n := c.src.count(p); n != 1 {
 			t.Errorf("%s downloaded %d times, want 1", p, n)
 		}
 	}
 	entries, _ := os.ReadDir(c.out)
-	if len(entries) != 12 {
-		t.Fatalf("%d files in output dir, want 12 (no leftover temp files)", len(entries))
+	if len(entries) != 24 {
+		t.Fatalf("%d files in output dir, want 24 (edges + pages per file, no leftover temp files)", len(entries))
 	}
 	if sum.Pages != 12*3 {
 		t.Fatalf("pages = %d, want %d", sum.Pages, 12*3)

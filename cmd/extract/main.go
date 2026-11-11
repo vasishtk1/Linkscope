@@ -1,11 +1,14 @@
 package main
 
 import (
+	"compress/gzip"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/vasishtk1/Linkscope/internal/extract"
@@ -14,10 +17,11 @@ import (
 
 func main() {
 	out := flag.String("o", "", "write all edges as TSV to this file")
+	pagesOut := flag.String("pages", "", "write page-level links as TSV to this file (gzipped if it ends in .gz)")
 	top := flag.Int("top", 15, "print this many top edges")
 	workers := flag.Int("workers", runtime.NumCPU(), "number of parser goroutines")
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: extract [-o edges.tsv] [-top N] [-workers N] file.warc.wat.gz")
+		fmt.Fprintln(os.Stderr, "usage: extract [-o edges.tsv] [-pages pages.tsv.gz] [-top N] [-workers N] file.warc.wat.gz")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -25,13 +29,13 @@ func main() {
 		flag.Usage()
 		os.Exit(2)
 	}
-	if err := run(flag.Arg(0), *out, *top, *workers); err != nil {
+	if err := run(flag.Arg(0), *out, *pagesOut, *top, *workers); err != nil {
 		fmt.Fprintln(os.Stderr, "extract:", err)
 		os.Exit(1)
 	}
 }
 
-func run(path, outPath string, top, workers int) error {
+func run(path, outPath, pagesPath string, top, workers int) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -51,20 +55,38 @@ func run(path, outPath string, top, workers int) error {
 	edges := g.Edges()
 
 	if outPath != "" {
-		if err := writeEdges(outPath, edges); err != nil {
+		if err := writeFile(outPath, func(w io.Writer) error { return links.WriteTSV(w, edges) }); err != nil {
 			return err
 		}
+	}
+	if pagesPath != "" {
+		pages := g.PageLinks()
+		if err := writeFile(pagesPath, func(w io.Writer) error { return links.WritePagesTSV(w, pages) }); err != nil {
+			return err
+		}
+		fmt.Printf("page links:         %d (wrote %s)\n", len(pages), pagesPath)
 	}
 	printReport(s, edges, top, workers, elapsed, float64(info.Size())/1e6)
 	return nil
 }
 
-func writeEdges(path string, edges []links.Edge) error {
+// writeFile creates path and fills it with write, gzipping when the name ends in .gz.
+func writeFile(path string, write func(io.Writer) error) error {
 	o, err := os.Create(path)
 	if err != nil {
 		return err
 	}
-	if err := links.WriteTSV(o, edges); err != nil {
+	var w io.Writer = o
+	var gz *gzip.Writer
+	if strings.HasSuffix(path, ".gz") {
+		gz = gzip.NewWriter(o)
+		w = gz
+	}
+	err = write(w)
+	if gz != nil && err == nil {
+		err = gz.Close()
+	}
+	if err != nil {
 		o.Close()
 		return err
 	}
