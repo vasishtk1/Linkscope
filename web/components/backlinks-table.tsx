@@ -85,7 +85,7 @@ function LinkType({ b }: { b: Backlink }) {
   return <span className="rounded-full bg-zinc-700/40 px-2 py-0.5 text-xs text-zinc-300">Mixed</span>;
 }
 
-function SiteIcon({ domain }: { domain: string }) {
+export function SiteIcon({ domain }: { domain: string }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
     return (

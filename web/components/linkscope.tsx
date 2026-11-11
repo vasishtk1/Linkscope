@@ -10,6 +10,7 @@ import { SearchBar } from "./search-bar";
 import { LinkGraph } from "./link-graph";
 import { StatCards } from "./stat-cards";
 import { BacklinksTable } from "./backlinks-table";
+import { TopPages } from "./top-pages";
 import { DownloadCsv } from "./download-csv";
 import { NetworkBackground } from "./network-background";
 import { SiteHeader } from "./site-header";
@@ -149,6 +150,9 @@ function Results({ data }: { data: Lookup }) {
         <h2 className="text-sm font-medium uppercase tracking-widest text-zinc-500">Stats</h2>
         <p className="mt-2 font-mono text-2xl text-zinc-100">{data.domain}</p>
         <StatCards data={data} />
+        {!!data.topPages?.length && (
+          <TopPages domain={data.domain} pages={data.topPages} total={data.linkedPages ?? data.topPages.length} />
+        )}
         <BacklinksTable backlinks={data.backlinks} total={data.linkingDomains} />
       </motion.section>
 

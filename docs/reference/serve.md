@@ -36,11 +36,17 @@ Lookup JSON (`/lookup?domain=github.com&limit=1` on the demo index from `make de
   "source": "Demo run: small slices of one Common Crawl file from CC-MAIN-2026-43",
   "originFiles": 2,
   "origins": [{"file": "demo-1", "pages": 242}, {"file": "demo-2", "pages": 242}],
+  "linkedPages": 361,
+  "topPages": [
+    {"page": "github.com/decidim/decidim", "sites": 3, "pages": 6, "nofollowPages": 0,
+     "sources": [{"domain": "calafell.cat", "pages": 2}, {"domain": "cuenca.gob.ec", "pages": 2}, {"domain": "touraine.fr", "pages": 2}]},
+    "… 199 more"
+  ],
   "tookMs": 0.048
 }
 ```
 
-`score` is `null` when the index was built without scores. `originFiles` and `origins` (which files the links came from, see [index.md](index.md)) are left out when the index has none. `tookMs` is how long the lookup took inside the API, measured around `ix.Lookup`; the website shows it in the search replay. The totals (`linkingDomains`, `linkingPages`, `nofollowPages`) always count every backlink, even when `limit` cuts the list short.
+`score` is `null` when the index was built without scores. `originFiles` and `origins` (which files the links came from, see [index.md](index.md)) are left out when the index has none, and so are `linkedPages` and `topPages` (the site's most linked pages, at most 200; `limit` doesn't cut them). With all 200 top pages, github.com's full answer is 75 KB. `tookMs` is how long the lookup took inside the API, measured around `ix.Lookup`; the website shows it in the search replay. The totals (`linkingDomains`, `linkingPages`, `nofollowPages`) always count every backlink, even when `limit` cuts the list short.
 
 Network JSON (`/network?n=3`):
 

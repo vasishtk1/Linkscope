@@ -9,6 +9,15 @@ export type Backlink = {
 // Origin is one Common Crawl file that had links to the site, matched to the replay by file name.
 export type Origin = { file: string; pages: number };
 
+// TopPage is one of the site's most linked pages, with the biggest sites linking to it (at most 10).
+export type TopPage = {
+  page: string;
+  sites: number;
+  pages: number;
+  nofollowPages: number;
+  sources: { domain: string; pages: number }[];
+};
+
 export type Lookup = {
   domain: string;
   score: number | null;
@@ -19,6 +28,8 @@ export type Lookup = {
   source: string;
   originFiles?: number;
   origins?: Origin[];
+  linkedPages?: number;
+  topPages?: TopPage[];
   tookMs?: number;
 };
 

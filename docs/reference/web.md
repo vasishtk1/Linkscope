@@ -91,7 +91,7 @@ Talks to the coordinator at `LINKSCOPE_COORDINATOR` (default `http://localhost:8
 
 ### `types.ts`
 
-`Backlink`, `Origin`, `Lookup` and `Network`, the shapes the lookup API returns (`originFiles`, `origins` and `tookMs` are optional because older indexes have no origins). `PipelineStatus`, `PipelineWorker`, `RunEvent` and `Pipeline` match the coordinator's JSON, and `Recording` matches `cmd/record`'s file.
+`Backlink`, `Origin`, `TopPage`, `Lookup` and `Network`, the shapes the lookup API returns (`originFiles`, `origins`, `linkedPages`, `topPages` and `tookMs` are optional because older indexes don't have them). `PipelineStatus`, `PipelineWorker`, `RunEvent` and `Pipeline` match the coordinator's JSON, and `Recording` matches `cmd/record`'s file.
 
 ### `replay.ts`
 
@@ -135,7 +135,7 @@ The header on both pages: the logo (a link home, which also clears a search) plu
 
 The page. Reads `?d=` from the URL and fetches `/api/lookup`. The page state (idle, loading, found, missing, error) is derived from the URL plus the last answer, rather than stored separately, so it can never fall out of sync with the address bar. Old requests are cancelled with an `AbortController` when the search changes.
 
-When a site is found, it's saved with `saveSearch`, and `HowWeFound` shows below the table if the answer has origins.
+When a site is found, it's saved with `saveSearch`. The Stats section shows `StatCards`, then `TopPages` if the answer has top pages, then `BacklinksTable`. `HowWeFound` shows below the table if the answer has origins.
 
 It shows `NetworkBackground` only while there's no search, inside `AnimatePresence`: it fades in over 1.2s and fades out in 0.4s when a search starts. Unmounting it stops its animation loop completely, so it costs nothing while you look at results.
 
@@ -244,9 +244,19 @@ Score, linking sites, linking pages, nofollow-only pages. `CountUp` animates eac
 
 **Why "linking sites" can be higher than the PageRank count:** the card counts every site that links, including nofollow-only ones. PageRank's `linking_domains` leaves those out, since they pass no score.
 
-### `backlinks-table.tsx` — `BacklinksTable`
+### `top-pages.tsx` — `TopPages`, `pageLabel`
 
-First 15 rows with a toggle to show every loaded row ("Show all", or "Show top 1,000" when the site has more, with a note that the CSV has the rest). Each row: favicon (or letter badge), site, pages, link type (Followed, Nofollow, or Mixed), and an example linking page. Example links open with `rel="nofollow"`.
+"Most linked pages": the site's pages ranked by how many different sites link to them (see [merge.md](merge.md#pagesgo)).
+
+- **Each row:** rank, the page, a bar, and the number of linking sites. The bar's length is relative to the top page, so the biggest pages stand out at a glance. The path sits above its bar, so long paths still fit on a phone.
+- **`pageLabel`** shortens a page for display: just the path (`/games/wordle`) when it's on the site itself, host and path on a subdomain (`blog.nytimes.com/post`). Percent escapes are decoded (`/caf%C3%A9` shows as `/café`); a broken escape is shown as it is instead of crashing. Hovering shows the full page.
+- **Click a row** to open it in place: linking pages and nofollow count, an "Open page" link (opens in a new tab with `rel="nofollow"`, to check the page still loads), and the biggest linking sites with their favicons and page counts, plus "+ N more sites" when there are more than the 10 stored. One row is open at a time.
+- **Top 10 first,** with "Show all" for the rest (up to 200). When there are more than 10, a filter box searches the paths, e.g. `blog`; while it has text, every match is shown.
+- **Header** says how many of the site's pages get links in total, and that these are the top 200 when there are more.
+
+### `backlinks-table.tsx` — `BacklinksTable`, `SiteIcon`
+
+First 15 rows with a toggle to show every loaded row ("Show all", or "Show top 1,000" when the site has more, with a note that the CSV has the rest). Each row: favicon (or letter badge), site, pages, link type (Followed, Nofollow, or Mixed), and an example linking page. Example links open with `rel="nofollow"`. `SiteIcon` (favicon, or a letter badge if it fails to load) is exported so `TopPages` can use it too.
 
 ### `download-csv.tsx` — `DownloadCsv`
 
