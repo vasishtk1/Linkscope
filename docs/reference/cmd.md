@@ -11,11 +11,13 @@ make build
 ./bin/extract data/sample.warc.wat.gz                 # report + top 15 edges
 ./bin/extract -o data/edges.tsv -top 30 data/sample.warc.wat.gz
 ./bin/extract -workers 1 data/sample.warc.wat.gz      # single-threaded, for comparison
+./bin/extract -o edges.tsv -pages pages.tsv.gz -top 0 data/sample.warc.wat.gz   # also page-level links
 ```
 
 | Flag | Default | Meaning |
 |---|---|---|
 | `-o` | none | Write every edge as TSV to this file |
+| `-pages` | none | Write page-level links (which exact pages each site links to, see [links.md](links.md#pagesgo)) to this file, gzipped if it ends in `.gz`. Same format as a worker's `X.pages.tsv.gz` |
 | `-top` | 15 | How many top edges to print |
 | `-workers` | number of CPU cores | Parser goroutines |
 
@@ -23,13 +25,15 @@ make build
 
 Parses flags, checks there's exactly one file argument, and calls `run`. On error it prints the error and exits with status 1 (status 2 for wrong usage).
 
-### `run(path, outPath string, top, workers int) error`
+### `run(path, outPath, pagesPath string, top, workers int) error`
 
-Opens the file, times `extract.Run`, optionally writes the TSV, and prints the report. It returns errors instead of exiting, so `main` is the only place that decides how the program ends.
+Opens the file, times `extract.Run`, optionally writes the edges and page links, and prints the report. It returns errors instead of exiting, so `main` is the only place that decides how the program ends.
 
-### `writeEdges(path string, edges []links.Edge) error`
+### `writeFile(path string, write func(io.Writer) error) error`
 
-Creates the output file and writes the TSV. It checks the error from `Close`, since that's where a failed final write to disk shows up.
+Creates the output file and fills it with `write`, gzipping when the name ends in `.gz`. It checks the errors from closing the gzip writer and the file, since that's where a failed final write to disk shows up.
+
+On the 1-file sample with 4 parsers, writing both files took 3.9s with a 208 MB memory peak. It finds 177,399 site → page links, against 130,138 site → site edges.
 
 ### `printReport(...)`
 
@@ -111,14 +115,27 @@ make merge                                              # data/results → data/
 | `-in` | `data/results` | Folder of `*.edges.tsv.gz` result files |
 | `-o` | `data/merged.edges.tsv.gz` | Output file (gzipped if it ends in `.gz`) |
 | `-origins` | none | Also write which result files each site's links came from (see [merge.md](merge.md#originsgo)). `cmd/index -origins` stores them in the index |
+| `-pages` | none | Also write each site's most linked pages, from the `*.pages.tsv.gz` files next to the results (see [merge.md](merge.md#pagesgo)). `cmd/index -pages` stores them in the index |
 
 ### `main()`
 
 Parses flags, rejects extra arguments, and calls `run`.
 
-### `run(in, out, originsPath string) error`
+### `run(in, out, originsPath, pagesPath string) error`
 
-Lists the result files, merges them (with origins when `originsPath` is set), writes the output, and prints a report: files merged, edges read, merged edges, unique domains, total linking pages, and time. It fails if the folder has no result files, so a typo in `-in` doesn't quietly produce an empty graph.
+Lists the result files, then runs `mergeEdges` and, when `pagesPath` is set, `mergePages`. It fails if the folder has no result files, so a typo in `-in` doesn't quietly produce an empty graph.
+
+### `mergeEdges(paths []string, out, originsPath string) error`
+
+Merges the edges (with origins when `originsPath` is set), writes the output, and prints a report: files merged, edges read, merged edges, unique domains, total linking pages, and time.
+
+**Why it's a separate function:** once it returns, nothing points at the edge graph any more, so Go's garbage collector can free it before `mergePages` builds its own big table. The two never have to fit in memory at the same time.
+
+### `mergePages(paths []string, out string) error`
+
+Runs `merge.Pages`, writes the result, and prints the pages files read, how many results had none, rows read, unique site → page pairs, and time.
+
+On the demo results (2 copies of the 1-file sample), the whole merge with origins and pages took 1.53s with a 140 MB memory peak: 0.75s for edges, 0.57s for pages (354,798 rows read, 177,399 unique pairs, 62,052 sites).
 
 ## cmd/pagerank
 
@@ -198,14 +215,15 @@ make sample-index                                  # the sample file → data/sa
 | `-shards` | `8` | Number of shard files |
 | `-source` | none | Description of the data, shown on the website |
 | `-origins` | none | Origins file from `cmd/merge -origins`; stored next to each site's backlinks |
+| `-pages` | none | Top pages file from `cmd/merge -pages`; stored after each site's origins |
 
 ### `main()`
 
 Parses flags, rejects extra arguments, and calls `run`.
 
-### `run(edgesPath, scoresPath, out string, shards int, source, originsPath string) error`
+### `run(edgesPath, scoresPath, out string, shards int, source, originsPath, pagesPath string) error`
 
-Loads the edges (reusing `merge.Files`, which handles gzip), reads the scores and origins (if given), calls `index.Build`, and prints the edge and domain counts, total shard size, and time.
+Loads the edges (reusing `merge.Files`, which handles gzip), reads the scores, origins and top pages (if given), calls `index.Build`, and prints the edge and domain counts, total shard size, and time. On the demo data with origins and pages: 0.81s, 197 MB memory peak, 31.2 MB of shards.
 
 ### `readScores(path string) (map[string]int, error)`
 

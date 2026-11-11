@@ -101,9 +101,9 @@ record: build
 	./bin/record -db $(RUN_DB) -o data/run.json $(if $(NAME),-name "$(NAME)")
 
 demo-index: build
-	./bin/merge -in data/demo/results -o data/demo/merged.edges.tsv.gz -origins data/demo/merged.origins.tsv.gz
+	./bin/merge -in data/demo/results -o data/demo/merged.edges.tsv.gz -origins data/demo/merged.origins.tsv.gz -pages data/demo/merged.pages.tsv.gz
 	./bin/pagerank -in data/demo/merged.edges.tsv.gz -o data/demo/scores.tsv -top 5
 	./bin/index -edges data/demo/merged.edges.tsv.gz -scores data/demo/scores.tsv -origins data/demo/merged.origins.tsv.gz \
-		-o data/demo/index -source "Demo run: small slices of one Common Crawl file from $(CRAWL)"
+		-pages data/demo/merged.pages.tsv.gz -o data/demo/index -source "Demo run: small slices of one Common Crawl file from $(CRAWL)"
 
 demo-save: demo-index record

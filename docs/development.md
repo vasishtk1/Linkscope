@@ -29,7 +29,7 @@
 | `make validate` | Compares `data/scores.tsv` with `data/cc-domain-ranks.tsv` and prints how closely they agree |
 | `make demo` | A small, light local run to watch on the dashboard: cuts the sample into `DEMO_FILES` (default 10) files of `DEMO_PAGES` (default 2,000) real pages, serves them from your own machine, and starts a coordinator on :8080 with `DEMO_WORKERS` (default 3) workers using one parser each. Nothing is downloaded. Ctrl+C stops everything |
 | `make record` | Saves the finished run in `RUN_DB` (default `data/demo/jobs.db`) to `data/run.json` for the website's replay. `NAME="..."` sets its label. Restart the API (`make web`) to load it |
-| `make demo-index` | Merges the demo's results (noting which files each site's links came from), runs PageRank, and builds `data/demo/index` |
+| `make demo-index` | Merges the demo's results (noting which files each site's links came from, and each site's most linked pages), runs PageRank, and builds `data/demo/index` |
 | `make demo-save` | `make demo-index` then `make record`: after a demo, this is the one command that saves it for the website |
 | `make sample` | Downloads the first WAT file of the crawl in `CRAWL` (default `CC-MAIN-2026-43`) to `data/sample.warc.wat.gz` |
 

@@ -36,6 +36,7 @@ type Options struct {
 	Shards  int
 	Source  string
 	Origins map[string][]merge.Origin
+	Pages   map[string]merge.SitePages
 }
 
 // ShardOf picks which shard a domain lives in: FNV-1a hash of the name, modulo the shard count.
@@ -84,7 +85,7 @@ func Build(dir string, edges []links.Edge, scores map[string]int, o Options) (Ma
 
 	for i, domains := range perShard {
 		sort.Strings(domains)
-		if err := writeShard(filepath.Join(tmp, shardName(i)), domains, byDst, scores, o.Origins); err != nil {
+		if err := writeShard(filepath.Join(tmp, shardName(i)), domains, byDst, scores, o); err != nil {
 			return Manifest{}, err
 		}
 	}
@@ -102,8 +103,8 @@ func Build(dir string, edges []links.Edge, scores map[string]int, o Options) (Ma
 	return m, os.Rename(tmp, dir)
 }
 
-// writeShard writes each domain's backlinks and origins, then the directory that says where each list starts, then the footer.
-func writeShard(path string, domains []string, byDst map[string][]Backlink, scores map[string]int, origins map[string][]merge.Origin) error {
+// writeShard writes each domain's backlinks, origins and top pages, then the directory that says where each list starts, then the footer.
+func writeShard(path string, domains []string, byDst map[string][]Backlink, scores map[string]int, o Options) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -125,17 +126,25 @@ func writeShard(path string, domains []string, byDst map[string][]Backlink, scor
 			pos += int64(n)
 		}
 		e.length = pos - e.offset
-		if og := origins[d]; len(og) > 0 {
+		if og := o.Origins[d]; len(og) > 0 {
 			e.OriginFiles = len(og)
 			n, _ := w.WriteString(originsLine(og[:min(len(og), maxOrigins)]))
 			e.olength = int64(n)
 			pos += int64(n)
 		}
+		if sp := o.Pages[d]; len(sp.Top) > 0 {
+			e.LinkedPages = sp.Total
+			for _, p := range sp.Top[:min(len(sp.Top), merge.MaxPages)] {
+				n, _ := fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%s\n", p.Page, p.Sites, p.Pages, p.NofollowPages, merge.SourcesField(p.Sources))
+				e.plength += int64(n)
+			}
+			pos += e.plength
+		}
 		dirRows = append(dirRows, e)
 	}
 	dirOffset := pos
 	for _, e := range dirRows {
-		fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", e.Domain, e.Score, e.LinkingDomains, e.LinkingPages, e.NofollowPages, e.offset, e.length, e.OriginFiles, e.olength)
+		fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", e.Domain, e.Score, e.LinkingDomains, e.LinkingPages, e.NofollowPages, e.offset, e.length, e.OriginFiles, e.olength, e.LinkedPages, e.plength)
 	}
 	var footer [footerSize]byte
 	binary.BigEndian.PutUint64(footer[:8], uint64(dirOffset))

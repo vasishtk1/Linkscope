@@ -35,15 +35,17 @@ Each shard file has three parts:
 
 | Part | Contents |
 |---|---|
-| Backlink lists | For each domain, in name order, its backlinks as TSV lines: `src  pages  nofollow_pages  example_src  example_dst`, most linking pages first (ties by name). When the index has origins, one more line follows each list: `file:pages  file:pages  …` (see below) |
-| Directory | One TSV line per domain in this shard: `domain  score  linking_domains  linking_pages  nofollow_pages  offset  length  origin_files  origins_length`. `score` is `-1` when there's no score |
+| Backlink lists | For each domain, in name order, its backlinks as TSV lines: `src  pages  nofollow_pages  example_src  example_dst`, most linking pages first (ties by name). When the index has origins, one more line follows each list: `file:pages  file:pages  …`. When it has top pages, up to 200 lines follow that: `page  sites  pages  nofollow_pages  src:pages,src:pages,…` (see below) |
+| Directory | One TSV line per domain in this shard: `domain  score  linking_domains  linking_pages  nofollow_pages  offset  length  origin_files  origins_length  linked_pages  pages_length`. `score` is `-1` when there's no score; `linked_pages` is how many of the domain's pages get links |
 | Footer | 16 bytes: where the directory starts (8-byte big-endian number), then the marker `LSIDX001` |
 
 The footer goes last so the file can be written in one pass: the directory's position is only known after every backlink list has been written. Opening a shard means reading the footer, jumping to the directory, and loading it.
 
 **Origins** say which Common Crawl files a domain's links were found in (from `cmd/merge -origins`, see [merge.md](merge.md#originsgo)). The website uses them to replay a search: it highlights those files in the pipeline replay. They sit right after the domain's backlink list, so they start at `offset + length`. At most 200 are stored per domain, most linking pages first; `origin_files` keeps the full count. The cap matters because a site like google.com is linked from nearly every file, and on a large run that line would get long.
 
-Indexes built before origins existed have 7 directory fields instead of 9. They still open, with no origins.
+**Top pages** are the domain's most linked pages (from `cmd/merge -pages`, see [merge.md](merge.md#pagesgo)): each page, how many different sites and pages link to it, and the 10 biggest of those sites. They start right after the origins line, at `offset + length + origins_length`. At most 200 are stored; `linked_pages` keeps the full count. On the demo data (2 copies of the 1-file sample), adding them grew the index to 31.2 MB, and github.com's whole lookup answer, with 221 backlinks and 200 top pages, is 75 KB.
+
+Indexes built before origins existed have 7 directory fields, and ones built before top pages have 9. Both still open, with nothing in the missing parts.
 
 **Every domain is in the directory**, including domains with no backlinks (with offset and length 0). A domain that only links out still has a score and is still a "known" site.
 
@@ -61,7 +63,7 @@ Indexes built before origins existed have 7 directory fields instead of 9. They 
 
 ### `Options`
 
-`Shards` (at least 1), `Source`, and `Origins` (optional, from `merge.ReadOrigins`).
+`Shards` (at least 1), `Source`, `Origins` (optional, from `merge.ReadOrigins`) and `Pages` (optional, from `merge.ReadPages`).
 
 ### `ShardOf(domain string, shards int) int`
 
@@ -77,9 +79,9 @@ Writing to a temp folder means a failed build never leaves a half-written index.
 
 **The output is byte-identical for the same input, in any order:** domains are sorted inside each shard and backlinks are sorted by pages, then name. A test builds from reversed input and compares the files.
 
-### `writeShard(path string, domains []string, byDst map[string][]Backlink, scores map[string]int, origins map[string][]merge.Origin) error`
+### `writeShard(path string, domains []string, byDst map[string][]Backlink, scores map[string]int, o Options) error`
 
-Writes one shard: each domain's backlink list and origins line, keeping track of where each starts and how long it is, then the directory, then the footer.
+Writes one shard: each domain's backlink list, origins line and top pages, keeping track of where each starts and how long it is, then the directory, then the footer.
 
 ### `originsLine(og []merge.Origin) string`
 
@@ -97,11 +99,11 @@ One site linking to the looked-up domain: `Domain`, `Pages`, `NofollowPages`, `E
 
 ### `Entry`
 
-One directory line: `Domain`, `Score` (`-1` if none), `LinkingDomains`, `LinkingPages`, `NofollowPages`, `OriginFiles`, plus unexported shard number, offset, length and origins length.
+One directory line: `Domain`, `Score` (`-1` if none), `LinkingDomains`, `LinkingPages`, `NofollowPages`, `OriginFiles`, `LinkedPages`, plus unexported shard number, offset, length, origins length and top pages length.
 
 ### `parseEntry(line string, n int, dataEnd int64) (Entry, error)`
 
-Reads one directory line, with 7 fields (older indexes) or 9. Refuses lines whose backlinks or origins would fall outside the data section.
+Reads one directory line, with 7 fields (no origins), 9 (no top pages) or 11. Refuses lines whose backlinks, origins or top pages would fall outside the data section.
 
 ### `Open(dir string) (*Index, error)`
 
@@ -121,6 +123,14 @@ One `ReadAt` of the domain's whole list, then parses up to `limit` lines (0 = al
 
 Reads the domain's origins line with one `ReadAt` at `offset + length`. Returns nothing for indexes without origins.
 
+### `(*Index) TopPages(e Entry) ([]merge.TopPage, error)`
+
+Reads the domain's top pages with one `ReadAt` at `offset + length + origins_length`, most linking sites first. Returns nothing for indexes without top pages.
+
+### `parseTopPage(line string) (merge.TopPage, error)`
+
+Splits one top pages line; the sources field is read with `merge.ParseSourcesField`.
+
 ### `(*Index) Close() error`
 
 Closes every shard file.
@@ -129,7 +139,7 @@ Closes every shard file.
 
 ### `Lookup`
 
-The answer to one search: `Domain`, `Score` (`null` in JSON when unknown), `LinkingDomains`, `LinkingPages`, `NofollowPages`, `Backlinks`, `Source`, plus `OriginFiles` and `Origins` (left out of the JSON when the index has none) and `TookMs`, which the API fills in.
+The answer to one search: `Domain`, `Score` (`null` in JSON when unknown), `LinkingDomains`, `LinkingPages`, `NofollowPages`, `Backlinks`, `Source`, plus `OriginFiles` and `Origins`, `LinkedPages` and `TopPages` (each left out of the JSON when the index has none) and `TookMs`, which the API fills in.
 
 ### `Normalize(input string) string`
 
@@ -143,7 +153,7 @@ Tries the host, then drops subdomains one at a time until it finds a domain that
 
 ### `(*Index) Lookup(input string, limit int) (*Lookup, error)`
 
-`Normalize`, then `Resolve`, then `Backlinks` and `Origins`. Returns `nil` (not an error) when nothing links to the site.
+`Normalize`, then `Resolve`, then `Backlinks`, `Origins` and `TopPages`. Returns `nil` (not an error) when nothing links to the site.
 
 ## network.go
 
@@ -182,6 +192,8 @@ The first `n` nodes and only the links whose two ends are both kept. Because `Ne
 | `TestBuildRejectsZeroShards` | Bad option is an error |
 | `TestOriginsAreStoredAndCapped` | Origins come back in order, capped at 200 with the full count kept, the backlink list next to them is untouched, and a file name with a colon survives |
 | `TestDirectoryRowsWithoutOrigins` | A 7-field line from an older index still parses |
+| `TestTopPagesAreStored` | Top pages and the full linked-page count come back exactly, next to origins and without them, and the backlinks and origins beside them are untouched |
+| `TestDirectoryRowsWithoutTopPages` | A 9-field line still parses; a top pages range past the data section is refused |
 | `TestNetworkPicksTopSitesAndLinksAmongThem` | Highest scores first, sites without backlinks skipped, ties go to more linking domains, only links inside the top N, `Top` drops links to removed sites |
 | `TestNormalize` | Scheme, case, path, port, `user@`, trailing dot; `www.` kept |
 

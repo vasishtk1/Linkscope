@@ -31,10 +31,12 @@ type Entry struct {
 	LinkingPages   int
 	NofollowPages  int
 	OriginFiles    int
+	LinkedPages    int
 	shard          int
 	offset         int64
 	length         int64
 	olength        int64
+	plength        int64
 }
 
 type shard struct {
@@ -122,13 +124,13 @@ func readDirectory(f *os.File, n int) ([]Entry, error) {
 	return entries, sc.Err()
 }
 
-// parseEntry reads one directory row; indexes built before origins existed have 7 fields instead of 9.
+// parseEntry reads one directory row; older indexes have 7 fields (no origins) or 9 (no top pages) instead of 11.
 func parseEntry(line string, n int, dataEnd int64) (Entry, error) {
 	f := strings.Split(line, "\t")
-	if (len(f) != 7 && len(f) != 9) || f[0] == "" {
-		return Entry{}, fmt.Errorf("want 7 or 9 fields, got %d", len(f))
+	if (len(f) != 7 && len(f) != 9 && len(f) != 11) || f[0] == "" {
+		return Entry{}, fmt.Errorf("want 7, 9 or 11 fields, got %d", len(f))
 	}
-	var nums [8]int64
+	var nums [10]int64
 	for i := range len(f) - 1 {
 		v, err := strconv.ParseInt(f[i+1], 10, 64)
 		if err != nil {
@@ -139,9 +141,9 @@ func parseEntry(line string, n int, dataEnd int64) (Entry, error) {
 	e := Entry{
 		Domain: f[0], Score: int(nums[0]), LinkingDomains: int(nums[1]), LinkingPages: int(nums[2]),
 		NofollowPages: int(nums[3]), shard: n, offset: nums[4], length: nums[5],
-		OriginFiles: int(nums[6]), olength: nums[7],
+		OriginFiles: int(nums[6]), olength: nums[7], LinkedPages: int(nums[8]), plength: nums[9],
 	}
-	if e.offset < 0 || e.length < 0 || e.olength < 0 || e.offset+e.length+e.olength > dataEnd {
+	if e.offset < 0 || e.length < 0 || e.olength < 0 || e.plength < 0 || e.offset+e.length+e.olength+e.plength > dataEnd {
 		return Entry{}, errors.New("backlink range outside the data section")
 	}
 	return e, nil
@@ -217,6 +219,45 @@ func (ix *Index) Origins(e Entry) ([]merge.Origin, error) {
 		out = append(out, merge.Origin{File: f[:i], Pages: pages})
 	}
 	return out, nil
+}
+
+// TopPages reads the domain's most linked pages, most linking sites first; empty if the index has none.
+func (ix *Index) TopPages(e Entry) ([]merge.TopPage, error) {
+	if e.plength == 0 {
+		return nil, nil
+	}
+	buf := make([]byte, e.plength)
+	if _, err := ix.shards[e.shard].f.ReadAt(buf, e.offset+e.length+e.olength); err != nil {
+		return nil, err
+	}
+	lines := strings.Split(strings.TrimSuffix(string(buf), "\n"), "\n")
+	out := make([]merge.TopPage, 0, len(lines))
+	for _, l := range lines {
+		p, err := parseTopPage(l)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", e.Domain, err)
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+func parseTopPage(line string) (merge.TopPage, error) {
+	f := strings.Split(line, "\t")
+	if len(f) != 5 {
+		return merge.TopPage{}, fmt.Errorf("top page: want 5 fields, got %d", len(f))
+	}
+	sites, err1 := strconv.Atoi(f[1])
+	pages, err2 := strconv.Atoi(f[2])
+	nofollow, err3 := strconv.Atoi(f[3])
+	if err := errors.Join(err1, err2, err3); err != nil {
+		return merge.TopPage{}, err
+	}
+	src, err := merge.ParseSourcesField(f[4])
+	if err != nil {
+		return merge.TopPage{}, err
+	}
+	return merge.TopPage{Page: f[0], Sites: sites, Pages: pages, NofollowPages: nofollow, Sources: src}, nil
 }
 
 func parseBacklink(line string) (Backlink, error) {

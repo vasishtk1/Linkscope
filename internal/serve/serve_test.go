@@ -26,6 +26,11 @@ func newServerWithRun(t *testing.T, run *record.Recording) *httptest.Server {
 	dir := filepath.Join(t.TempDir(), "index")
 	if _, err := index.Build(dir, edges, map[string]int{"github.com": 100}, index.Options{Shards: 4, Source: "test", Origins: map[string][]merge.Origin{
 		"github.com": {{File: "x-00001", Pages: 30}, {File: "x-00000", Pages: 12}},
+	}, Pages: map[string]merge.SitePages{
+		"github.com": {Total: 2, Top: []merge.TopPage{
+			{Page: "github.com/golang", Sites: 1, Pages: 30, NofollowPages: 1, Sources: []merge.PageSource{{Domain: "go.dev", Pages: 30}}},
+			{Page: "github.com/golang/go", Sites: 1, Pages: 12, Sources: []merge.PageSource{{Domain: "reddit.com", Pages: 12}}},
+		}},
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -65,6 +70,9 @@ func TestLookup(t *testing.T) {
 	}
 	if got.OriginFiles != 2 || len(got.Origins) != 2 || got.Origins[0] != (merge.Origin{File: "x-00001", Pages: 30}) || got.TookMs < 0 {
 		t.Fatalf("origins %d %+v, took %v", got.OriginFiles, got.Origins, got.TookMs)
+	}
+	if got.LinkedPages != 2 || len(got.TopPages) != 2 || got.TopPages[0].Page != "github.com/golang" || got.TopPages[0].Sources[0].Domain != "go.dev" {
+		t.Fatalf("top pages %d %+v", got.LinkedPages, got.TopPages)
 	}
 }
 

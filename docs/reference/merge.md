@@ -93,3 +93,76 @@ Writes `dst, file, pages` rows with a header, sorted by site, then by `List` ord
 Loads that file back into per-site lists in `List` order. `cmd/index` uses it to store origins in the index.
 
 **Test:** for every site, the pages in its origins add up to the pages linking to it in the merged graph, and the file survives a write and read.
+
+## pages.go
+
+Builds each site's **most linked pages** from the page-level files the workers write next to their results (`X.pages.tsv.gz`, see `links/pages.go`).
+
+```
+x-00000.pages.tsv.gz   nytimes.com/games/wordle  ← reddit.com   3 pages
+x-00001.pages.tsv.gz   nytimes.com/games/wordle  ← reddit.com   2 pages
+x-00001.pages.tsv.gz   nytimes.com/games/wordle  ← bbc.co.uk    1 page     ──▶   nytimes.com/games/wordle   2 sites, 6 pages
+```
+
+### `MaxPages`, `MaxPageSources`
+
+200 pages kept per site, and the top 10 linking sites kept per page. **Why cap:** a big site like facebook.com has millions of linked pages. The website shows a top-10 list with "show all", and the planned agent cares about pages with many links, so the long tail isn't worth the index space. `SitePages.Total` still counts every linked page.
+
+### `PageSource`, `TopPage`, `SitePages`
+
+| Type | Fields |
+|---|---|
+| `PageSource` | `Domain` (a linking site), `Pages` (how many of its pages link) |
+| `TopPage` | `Page`, `Sites` (different linking sites, exact), `Pages`, `NofollowPages`, `Sources` (biggest linking sites, at most 10) |
+| `SitePages` | `Total` (how many of the site's pages get links), `Top` (at most 200 `TopPage`s) |
+
+### `PageStats`
+
+`Files` (pages files read), `Missing` (results without a pages file, e.g. from before page-level links existed), `Rows` (rows read), `Pairs` (unique page and linking-site pairs).
+
+### `PagesPath(edgesPath string) string`
+
+`x-00042.edges.tsv.gz` → `x-00042.pages.tsv.gz`.
+
+### `Pages(paths []string) (map[string]SitePages, PageStats, error)`
+
+Reads the pages file next to each result and builds every site's top pages.
+
+1. Adds every row into one map keyed by `(page, linking site)`, summing pages across files.
+2. Groups those by page: the number of entries for a page is its exact count of **different** linking sites.
+3. Groups pages by site, sorts them (most linking sites first, then most pages, then by name) and keeps the top 200.
+
+**Why count sites exactly instead of adding up per-file counts:** the same site often links to the same page from several files. Adding per-file site counts would count it again in each file. Keeping `(page, site)` pairs until the end avoids that, at the cost of memory: the pairs are the biggest thing merge holds. `cmd/merge` builds them only after the edge graph has been written and freed.
+
+**Why sort by sites, not pages:** one site linking from 5,000 pages (a sidebar link, say) is weaker evidence than 50 different sites linking once each.
+
+A result with no pages file is skipped and counted in `Missing`, so old results still merge.
+
+### `readPagesFile(path string, add func(links.PageLink)) error`
+
+Opens one gzipped pages file and passes each row to `add`.
+
+### `sortPages`, `sortSources`
+
+Fixed orders so the output is the same every run. Sources: most pages first, then by domain.
+
+### `SourcesField(l []PageSource) string`, `ParseSourcesField(f string) ([]PageSource, error)`
+
+Packs a page's linking sites into one field, `reddit.com:3,bbc.co.uk:1`, and reads it back. Domain names can't contain `:` or `,`, so splitting is safe. The index uses the same format.
+
+### `WritePages(path string, sp map[string]SitePages) error`
+
+One row per kept page, sorted by site then rank: `dst	total_pages	page	sites	pages	nofollow_pages	sources`. Written atomically, gzipped if the name ends in `.gz`. `total_pages` repeats on each of a site's rows; gzip makes that nearly free.
+
+### `ReadPages(path string) (map[string]SitePages, error)`
+
+Loads that file back. `cmd/index` uses it.
+
+### Tests (`pages_test.go`)
+
+| Test | What it proves |
+|---|---|
+| `TestPagesCombineAcrossFiles` | Three result files combine into exact site counts, page counts, nofollow counts and sources, in the right order |
+| `TestPagesCountsResultsWithoutPagesFile` | A result without a pages file is counted as missing, not an error |
+| `TestPagesAreCapped` | 205 pages keep 200 and report a total of 205; 13 linking sites keep 10 sources and report 13 sites |
+| `TestWritePagesRoundTrip` | Writing then reading gives back the same data |

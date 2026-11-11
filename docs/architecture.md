@@ -59,7 +59,7 @@ Details in [reference/extract.md](reference/extract.md).
           │  write result atomically│      │  write result atomically│
           └───────────┬─────────────┘      └────────────┬────────────┘
                       ▼                                 ▼
-               results/<file>.edges.tsv.gz  (one per job, shared folder)
+               results/<file>.edges.tsv.gz + <file>.pages.tsv.gz  (per job, shared folder)
 ```
 
 Each Common Crawl file is one job. A worker:
@@ -67,7 +67,7 @@ Each Common Crawl file is one job. A worker:
 1. **Claims** a job and gets a 60s lease
 2. **Streams** the file from Common Crawl straight into the extractor, without saving the download
 3. **Heartbeats** every 20s to keep the lease. If the coordinator answers "lease lost," the worker cancels the download and moves on
-4. **Writes** `<file>.edges.tsv.gz` via temp file, fsync, and atomic rename
+4. **Writes** `<file>.pages.tsv.gz` (which exact pages each site links to), then `<file>.edges.tsv.gz` (site to site), each via temp file, fsync, and atomic rename. The edges file goes last because its appearing is what marks the job's output complete
 5. **Reports** complete, fail, or (on shutdown) release, then claims the next job
 6. **Exits** once the coordinator says nothing is left to do
 
@@ -110,6 +110,8 @@ The edge totals above are summed per file. The same `a.com → b.com` pair can a
 `cmd/merge` reads every result file and combines repeated `src → dst` pairs into one edge, adding up their page counts. The output, `merged.edges.tsv.gz`, is the full domain link graph that PageRank scores.
 
 The merge follows the same order-independent rules as extraction, so the merged graph is the same as if every page had been processed in a single program, in any order. Details in [reference/merge.md](reference/merge.md).
+
+With `-pages`, merge also reads the `.pages.tsv.gz` files and works out each site's **most linked pages**: for every page, how many different sites link to it (counted exactly, not added up per file), and the biggest of those sites. The top 200 per site go into the index, and the website shows them as "Most linked pages". This is also what the planned PR agent needs to find broken pages that still get links.
 
 `cmd/pagerank` then scores every domain. Each site splits its score among the sites it links to, in rounds, until the numbers settle. Each linking site counts as one vote, and nofollow-only links don't count. The raw ranks become a 0–100 score on a log scale, written to `scores.tsv`. Details in [reference/pagerank.md](reference/pagerank.md).
 

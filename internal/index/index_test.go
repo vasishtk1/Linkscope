@@ -236,6 +236,53 @@ func TestDirectoryRowsWithoutOrigins(t *testing.T) {
 	}
 }
 
+func TestTopPagesAreStored(t *testing.T) {
+	gh := merge.SitePages{Total: 9, Top: []merge.TopPage{
+		{Page: "github.com/golang/go", Sites: 3, Pages: 40, NofollowPages: 2, Sources: []merge.PageSource{{Domain: "go.dev", Pages: 30}, {Domain: "reddit.com", Pages: 10}}},
+		{Page: "github.com/", Sites: 1, Pages: 1, Sources: []merge.PageSource{{Domain: "go.dev", Pages: 1}}},
+	}}
+	dev := merge.SitePages{Total: 1, Top: []merge.TopPage{{Page: "go.dev/doc", Sites: 1, Pages: 2, Sources: []merge.PageSource{{Domain: "github.com", Pages: 2}}}}}
+	dir := filepath.Join(t.TempDir(), "index")
+	og := map[string][]merge.Origin{"github.com": {{File: "x-00000", Pages: 5}}}
+	pages := map[string]merge.SitePages{"github.com": gh, "go.dev": dev}
+	if _, err := Build(dir, testEdges, testScores, Options{Shards: 3, Origins: og, Pages: pages}); err != nil {
+		t.Fatal(err)
+	}
+	ix, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ix.Close()
+
+	l, err := ix.Lookup("github.com", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.LinkedPages != 9 || !reflect.DeepEqual(l.TopPages, gh.Top) {
+		t.Fatalf("github.com: %d linked pages, top %+v", l.LinkedPages, l.TopPages)
+	}
+	if !reflect.DeepEqual(l.Origins, og["github.com"]) || len(l.Backlinks) != 4 {
+		t.Fatalf("top pages broke origins or backlinks: %+v, %d", l.Origins, len(l.Backlinks))
+	}
+	l, _ = ix.Lookup("go.dev", 0)
+	if l.LinkedPages != 1 || !reflect.DeepEqual(l.TopPages, dev.Top) || l.Origins != nil {
+		t.Fatalf("go.dev without origins: %+v", l)
+	}
+}
+
+func TestDirectoryRowsWithoutTopPages(t *testing.T) {
+	e, err := parseEntry("github.com\t100\t3\t64\t14\t0\t90\t2\t20", 2, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.OriginFiles != 2 || e.olength != 20 || e.LinkedPages != 0 || e.plength != 0 {
+		t.Fatalf("got %+v", e)
+	}
+	if _, err := parseEntry("github.com\t100\t3\t64\t14\t0\t90\t2\t20\t5\t2000", 2, 1000); err == nil {
+		t.Fatal("a top pages range past the data section should be rejected")
+	}
+}
+
 func mustFind(t *testing.T, ix *Index, d string) Entry {
 	t.Helper()
 	e, ok := ix.Find(d)

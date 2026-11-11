@@ -82,9 +82,9 @@ Linkscope/
 │   ├── fixture/               # builds fake Common Crawl files for tests
 │   ├── index/                 # sharded backlink index: build, open, look up a site
 │   ├── jobs/                  # SQLite job list: claims, leases, retries, status, event log
-│   ├── links/                 # URL → domain, which links count, domain link graph
+│   ├── links/                 # URL → domain, which links count, domain and page link graphs
 │   ├── loadtest/              # runs many lookups at once and records latencies
-│   ├── merge/                 # combines worker result files into one link graph
+│   ├── merge/                 # combines worker results: link graph, origins, top pages
 │   ├── pagerank/              # PageRank over the domain graph, 0–100 scores
 │   ├── record/                # saves a run's files, workers and event log for replay
 │   ├── serve/                 # lookup API routes: /lookup, /known, /network, /run, /stats

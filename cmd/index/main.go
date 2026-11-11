@@ -18,18 +18,19 @@ func main() {
 	shards := flag.Int("shards", 8, "number of shard files")
 	source := flag.String("source", "", "description of the data, shown on the website")
 	originsPath := flag.String("origins", "", "which files each site's links came from, from cmd/merge -origins (optional)")
+	pagesPath := flag.String("pages", "", "each site's most linked pages, from cmd/merge -pages (optional)")
 	flag.Parse()
 	if flag.NArg() != 0 {
 		flag.Usage()
 		os.Exit(2)
 	}
-	if err := run(*edgesPath, *scoresPath, *out, *shards, *source, *originsPath); err != nil {
+	if err := run(*edgesPath, *scoresPath, *out, *shards, *source, *originsPath, *pagesPath); err != nil {
 		fmt.Fprintln(os.Stderr, "index:", err)
 		os.Exit(1)
 	}
 }
 
-func run(edgesPath, scoresPath, out string, shards int, source, originsPath string) error {
+func run(edgesPath, scoresPath, out string, shards int, source, originsPath, pagesPath string) error {
 	start := time.Now()
 	g, _, err := merge.Files([]string{edgesPath})
 	if err != nil {
@@ -45,7 +46,13 @@ func run(edgesPath, scoresPath, out string, shards int, source, originsPath stri
 			return fmt.Errorf("%s: %w", originsPath, err)
 		}
 	}
-	m, err := index.Build(out, g.Edges(), scores, index.Options{Shards: shards, Source: source, Origins: origins})
+	var pages map[string]merge.SitePages
+	if pagesPath != "" {
+		if pages, err = merge.ReadPages(pagesPath); err != nil {
+			return fmt.Errorf("%s: %w", pagesPath, err)
+		}
+	}
+	m, err := index.Build(out, g.Edges(), scores, index.Options{Shards: shards, Source: source, Origins: origins, Pages: pages})
 	if err != nil {
 		return err
 	}
@@ -60,6 +67,9 @@ func run(edgesPath, scoresPath, out string, shards int, source, originsPath stri
 	fmt.Printf("shards:  %d, %.1f MB total\n", m.Shards, float64(size)/1e6)
 	if origins != nil {
 		fmt.Printf("origins: %d sites\n", len(origins))
+	}
+	if pages != nil {
+		fmt.Printf("pages:   %d sites with top pages\n", len(pages))
 	}
 	fmt.Printf("time:    %.2fs\n", time.Since(start).Seconds())
 	fmt.Printf("wrote %s\n", out)
