@@ -29,8 +29,12 @@ type Link = SimulationLinkDatum<Node> & { nofollow: boolean; born: number };
 
 const DEFAULT_NODES = 60;
 const MIN_NODES = 0;
-const ADD_EVERY_MS = 60;
 const GROW_MS = 450;
+const BUILD_MS = 1500;
+const MAX_STAGGER_MS = 60;
+const SLIDER_WAIT_MS = 150;
+const LAYOUT_BUDGET_MS = 10;
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
 type Hover = { x: number; y: number; node: Node } | null;
 
@@ -43,8 +47,11 @@ export function LinkGraph({ domain, backlinks, total }: { domain: string; backli
   const [limit, setLimit] = useState(Math.min(DEFAULT_NODES, maxShown));
   const limitRef = useRef(limit);
   const resetRef = useRef<() => void>(() => {});
+  const syncRef = useRef<() => void>(() => {});
   useEffect(() => {
     limitRef.current = limit;
+    const t = window.setTimeout(() => syncRef.current(), SLIDER_WAIT_MS);
+    return () => window.clearTimeout(t);
   }, [limit]);
 
   useEffect(() => {
@@ -75,52 +82,96 @@ export function LinkGraph({ domain, backlinks, total }: { domain: string; backli
     const links: Link[] = [];
     loadIcon(domain);
 
+    const linkDistance = (n: Node) => 120 + 90 / Math.sqrt(n.pages);
     const linkForce = forceLink<Node, Link>(links)
       .id((d) => d.id)
-      .distance((l) => 120 + 90 / Math.sqrt((l.target as Node).pages));
+      .distance((l) => linkDistance(l.target as Node));
     const sim = forceSimulation<Node>(nodes)
       .force("charge", forceManyBody<Node>().strength(-160))
       .force("link", linkForce)
       .force("collide", forceCollide<Node>((d) => d.r + 8))
-      .alphaDecay(0.02);
+      .alphaDecay(0.02)
+      .velocityDecay(0.55)
+      .stop();
 
-    // Grows or shrinks the graph toward the slider's value, strongest sites first, so it builds in front of the user.
+    // Where a node is drawn: it glides from the center to its laid-out spot after it's born.
+    const at = (n: Node, now: number): [number, number, number] => {
+      if (n.center) return [n.x!, n.y!, 1];
+      const t = Math.min(1, (now - n.born) / GROW_MS);
+      if (t <= 0) return [0, 0, 0];
+      const p = easeOut(t);
+      return [n.x! * p, n.y! * p, t];
+    };
+
+    // Grows or shrinks the graph to the slider's value: new sites are laid out first, then glide out strongest first.
     const list = backlinks;
-    const step = () => {
+    let laying = false;
+    const sync = () => {
       const target = Math.min(limitRef.current, list.length);
       const have = nodes.length - 1;
       if (have === target) return;
       if (have > target) {
         nodes.splice(target + 1);
         links.splice(target);
-      } else {
-        const batch = Math.max(1, Math.ceil((target - have) / 20));
-        const now = performance.now();
-        for (let i = have; i < Math.min(target, have + batch); i++) {
-          const b = list[i];
-          const angle = Math.random() * Math.PI * 2;
-          const node: Node = {
-            id: b.domain,
-            r: 10 + 4 * Math.log2(b.pages + 1),
-            pages: b.pages,
-            nofollow: b.nofollowPages === b.pages,
-            center: false,
-            pinned: false,
-            born: now,
-            x: Math.cos(angle) * 40,
-            y: Math.sin(angle) * 40,
-          };
-          nodes.push(node);
-          links.push({ source: center, target: node, nofollow: node.nofollow, born: now });
-          loadIcon(b.domain);
-        }
+        sim.nodes(nodes);
+        linkForce.links(links);
+        return;
+      }
+      for (const n of nodes) {
+        if (n.born === Infinity) continue;
+        n.fx = n.x;
+        n.fy = n.y;
+      }
+      for (let i = have; i < target; i++) {
+        const b = list[i];
+        const pages = Math.max(1, b.pages);
+        const angle = i * GOLDEN_ANGLE;
+        const dist = 120 + 90 / Math.sqrt(pages) + 6 * Math.sqrt(i);
+        const node: Node = {
+          id: b.domain,
+          r: 10 + 4 * Math.log2(pages + 1),
+          pages,
+          nofollow: b.nofollowPages === b.pages,
+          center: false,
+          pinned: false,
+          born: Infinity,
+          x: Math.cos(angle) * dist,
+          y: Math.sin(angle) * dist,
+        };
+        nodes.push(node);
+        links.push({ source: center, target: node, nofollow: node.nofollow, born: node.born });
+        loadIcon(b.domain);
       }
       sim.nodes(nodes);
       linkForce.links(links);
-      sim.alpha(0.6).restart();
-      setAdded(nodes.length - 1);
+      sim.stop().alpha(1);
+      laying = true;
     };
-    const adder = window.setInterval(step, ADD_EVERY_MS);
+
+    // Runs a few layout steps per frame so a big graph never freezes the page; when done, the new sites start gliding out.
+    const layoutStep = (now: number) => {
+      const until = now + LAYOUT_BUDGET_MS;
+      while (sim.alpha() > sim.alphaMin() && performance.now() < until) sim.tick();
+      if (sim.alpha() > sim.alphaMin()) return;
+      laying = false;
+      const waiting = nodes.filter((n) => n.born === Infinity).length;
+      const stagger = Math.min(MAX_STAGGER_MS, BUILD_MS / Math.max(1, waiting));
+      let k = 0;
+      nodes.forEach((n, i) => {
+        if (n.born !== Infinity) return;
+        n.born = now + k++ * stagger;
+        links[i - 1].born = n.born;
+      });
+      for (const n of nodes) {
+        n.vx = 0;
+        n.vy = 0;
+        if (n.center || n.pinned) continue;
+        n.fx = null;
+        n.fy = null;
+      }
+    };
+    syncRef.current = sync;
+    sync();
 
     resetRef.current = () => {
       for (const n of nodes) {
@@ -128,14 +179,16 @@ export function LinkGraph({ domain, backlinks, total }: { domain: string; backli
         n.fx = n.center ? 0 : null;
         n.fy = n.center ? 0 : null;
       }
-      sim.alpha(0.8).restart();
+      if (!laying) sim.alpha(0.3).restart();
     };
 
     const nodeAt = (sx: number, sy: number) => {
       const [x, y] = transform.invert([sx, sy]);
+      const now = performance.now();
       for (let i = nodes.length - 1; i >= 0; i--) {
         const n = nodes[i];
-        if ((n.x! - x) ** 2 + (n.y! - y) ** 2 <= n.r ** 2) return n;
+        const [nx, ny, a] = at(n, now);
+        if (a > 0 && (nx - x) ** 2 + (ny - y) ** 2 <= n.r ** 2) return n;
       }
       return null;
     };
@@ -149,7 +202,7 @@ export function LinkGraph({ domain, backlinks, total }: { domain: string; backli
     const dragger = drag<HTMLCanvasElement, unknown, Node | null>()
       .subject((e) => nodeAt(e.x, e.y))
       .on("start", (e) => {
-        if (!e.active) sim.alphaTarget(0.3).restart();
+        if (!e.active && !laying) sim.alphaTarget(0.1).restart();
       })
       .on("drag", (e) => {
         const [x, y] = transform.invert(pointer(e.sourceEvent, canvas));
@@ -192,8 +245,16 @@ export function LinkGraph({ domain, backlinks, total }: { domain: string; backli
     canvas.addEventListener("pointerleave", onLeave);
 
     let frame = 0;
+    let shownCount = -1;
     const draw = () => {
       const now = performance.now();
+      if (laying) layoutStep(now);
+      let visible = 0;
+      for (const n of nodes) if (!n.center && n.born <= now) visible++;
+      if (visible !== shownCount) {
+        shownCount = visible;
+        setAdded(visible);
+      }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
       ctx.translate(transform.x, transform.y);
@@ -202,11 +263,12 @@ export function LinkGraph({ domain, backlinks, total }: { domain: string; backli
       for (const l of links) {
         const s = l.source as Node;
         const t = l.target as Node;
-        const p = easeOut(Math.min(1, (now - l.born) / GROW_MS));
+        const [tx, ty, p] = at(t, now);
+        if (p <= 0) continue;
         const active = hovered === t;
         ctx.beginPath();
         ctx.moveTo(s.x!, s.y!);
-        ctx.lineTo(s.x! + (t.x! - s.x!) * p, s.y! + (t.y! - s.y!) * p);
+        ctx.lineTo(tx, ty);
         ctx.setLineDash(l.nofollow ? [5, 4] : []);
         ctx.strokeStyle = l.nofollow
           ? `rgba(251,146,60,${active ? 0.9 : 0.45})`
@@ -217,7 +279,7 @@ export function LinkGraph({ domain, backlinks, total }: { domain: string; backli
       ctx.setLineDash([]);
 
       // Pulse around the center while the graph is still building.
-      if (nodes.length - 1 < Math.min(limitRef.current, list.length)) {
+      if (visible < Math.min(limitRef.current, list.length)) {
         const phase = ((now - start) % 1200) / 1200;
         ctx.beginPath();
         ctx.arc(0, 0, center.r + phase * 40, 0, Math.PI * 2);
@@ -228,7 +290,9 @@ export function LinkGraph({ domain, backlinks, total }: { domain: string; backli
 
       for (let i = 0; i < nodes.length; i++) {
         const n = nodes[i];
-        const a = easeOutBack(Math.min(1, (now - n.born) / GROW_MS));
+        const [x, y, t] = at(n, now);
+        if (t <= 0) continue;
+        const a = easeOutBack(t);
         const r = n.r * a;
         if (r <= 0) continue;
         ctx.save();
@@ -237,7 +301,7 @@ export function LinkGraph({ domain, backlinks, total }: { domain: string; backli
           ctx.shadowBlur = 30;
         }
         ctx.beginPath();
-        ctx.arc(n.x!, n.y!, r, 0, Math.PI * 2);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
         const icon = icons.get(n.id);
         ctx.fillStyle = icon ? "#18181b" : badgeColor(n.id);
         ctx.fill();
@@ -246,28 +310,28 @@ export function LinkGraph({ domain, backlinks, total }: { domain: string; backli
         if (icon) {
           ctx.save();
           ctx.beginPath();
-          ctx.arc(n.x!, n.y!, r * 0.72, 0, Math.PI * 2);
+          ctx.arc(x, y, r * 0.72, 0, Math.PI * 2);
           ctx.clip();
           const s = r * 1.15;
-          ctx.drawImage(icon, n.x! - s / 2, n.y! - s / 2, s, s);
+          ctx.drawImage(icon, x - s / 2, y - s / 2, s, s);
           ctx.restore();
         } else {
           ctx.fillStyle = "rgba(255,255,255,0.92)";
           ctx.font = `600 ${Math.max(9, r * 0.8)}px ${sans}`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          ctx.fillText(n.id[0].toUpperCase(), n.x!, n.y! + 1);
+          ctx.fillText(n.id[0].toUpperCase(), x, y + 1);
         }
 
         ctx.beginPath();
-        ctx.arc(n.x!, n.y!, r, 0, Math.PI * 2);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.strokeStyle = n.center ? "#93c5fd" : n.nofollow ? "#fb923c" : hovered === n ? "#93c5fd" : "#3f3f46";
         ctx.lineWidth = n.center ? 2.5 : 1.5;
         ctx.stroke();
 
         if (n.pinned) {
           ctx.beginPath();
-          ctx.arc(n.x! + r * 0.75, n.y! - r * 0.75, 3, 0, Math.PI * 2);
+          ctx.arc(x + r * 0.75, y - r * 0.75, 3, 0, Math.PI * 2);
           ctx.fillStyle = "#e4e4e7";
           ctx.fill();
         }
@@ -278,7 +342,7 @@ export function LinkGraph({ domain, backlinks, total }: { domain: string; backli
           ctx.font = `${n.center ? 600 : 400} ${n.center ? 13 : 11}px ${mono}`;
           ctx.textAlign = "center";
           ctx.textBaseline = "top";
-          ctx.fillText(n.id, n.x!, n.y! + r + 6);
+          ctx.fillText(n.id, x, y + r + 6);
           ctx.globalAlpha = 1;
         }
       }
@@ -288,7 +352,6 @@ export function LinkGraph({ domain, backlinks, total }: { domain: string; backli
 
     return () => {
       cancelAnimationFrame(frame);
-      window.clearInterval(adder);
       sim.stop();
       observer.disconnect();
       canvas.removeEventListener("pointermove", onMove);
