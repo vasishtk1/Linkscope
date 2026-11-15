@@ -335,3 +335,52 @@ Picks domains, sets up an HTTP client that keeps one connection per goroutine op
 ### `pickDomains(path string, top int) ([]string, error)`
 
 Reads the scores file and keeps domains with at least one linking site, so every lookup should return `200`. Any error then points at a real problem.
+
+## cmd/linkcheck
+
+Checks whether a site's most linked pages still work, using the index's page-level data. It's phase 1 of the pull request agent. See [linkcheck.md](linkcheck.md) for what counts as broken and how the checker stays polite.
+
+```sh
+make build
+./bin/linkcheck -site fansided.com                      # top 30 pages of a site in the demo index
+./bin/linkcheck -site wordpress.org -limit 100          # more pages
+./bin/linkcheck -site fansided.com -json > checks.json  # for the next phase
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `-index` | `data/demo/index` | Index folder. It must have page-level data (built after 2026-11-10) |
+| `-site` | required | Site to check, typed any way (`https://www.example.com/x` works) |
+| `-limit` | `30` | How many of the site's most linked pages to check (the index keeps up to 200) |
+| `-workers` | `2` | Requests in flight at once |
+| `-interval` | `1s` | Time between requests |
+| `-timeout` | `10s` | Time limit per request, redirects included |
+| `-json` | off | Print JSON instead of a table |
+
+Ctrl+C stops it cleanly: requests still waiting become `couldn't check (stopped)` and the table is still printed.
+
+### `main()`
+
+Parses flags, sets up a context that's cancelled on Ctrl+C, and calls `run`.
+
+### `run(ctx, dir, site string, limit, workers int, o linkcheck.Options, asJSON bool) error`
+
+Opens the index, finds the site the same way the search box does (`index.Normalize` + `Resolve`), takes its first `limit` top pages, which are already sorted by linking sites, checks them with `CheckAll`, and prints a table or JSON. Each JSON row is a `linkcheck.Check` plus `sites`, the number of linking sites. Embedding the struct puts its fields at the top level of the row.
+
+### `printTable(w, domain, top, rows, took)`
+
+Prints one line per page and a summary line with the time taken and a count of each result. `text/tabwriter` lines up the columns.
+
+### `describe(c linkcheck.Check, domain string) string`
+
+The text in the result column, for example `broken (410)`, `ok, redirects to /impact/` or `couldn't check (blocked 403)`.
+
+### `moved(c) bool`, `bare(rawURL) string`, `same(page) string`
+
+`moved` hides redirects that only switch to https, add or drop `www.`, or add a trailing slash. On creativecommons.org, 20 of the top 30 pages redirect just to add a `/`, which is noise. Real moves like `/about/open-science` → `/impact/` are still shown. `bare` strips the scheme, and `same` strips the query, `www.` and any trailing slash before comparing.
+
+### `label(page, domain string) string`
+
+Shows just the path for pages on the site itself (`/licenses/by/4.0`), and host + path for subdomains (`de.wordpress.org/support`), like the website's "Most linked pages" card.
+
+Measured on 2026-11-15 on five real sites (105 pages in total, 157s): about 1.5 seconds per page at 1 request per second, robots.txt included. It found 10 broken pages and 1 that redirects to the homepage. See the table in [linkcheck.md](linkcheck.md#measured-2026-11-15-demo-index-1-request-per-second-2-in-flight).

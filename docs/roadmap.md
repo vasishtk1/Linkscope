@@ -14,3 +14,5 @@
 ## Future
 
 - GitHub App that opens pull requests to fix SEO problems found with the backlink index (redirects for dead pages that still receive backlinks, broken outbound links)
+  - Phase 1 done: `cmd/linkcheck` finds a site's most linked pages that are broken (404/410) or redirect to the homepage, respecting robots.txt ([reference](reference/linkcheck.md))
+  - Next: pick a redirect target for each broken page, edit the site's redirect file, open the pull request

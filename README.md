@@ -68,6 +68,7 @@ Linkscope/
 │   ├── coordinator/main.go    # queues files as jobs and serves the coordinator API
 │   ├── extract/main.go        # runs the extractor on one WAT file and prints a report
 │   ├── index/main.go          # builds the sharded backlink index from the graph and scores
+│   ├── linkcheck/main.go      # checks whether a site's most linked pages still work
 │   ├── loadtest/main.go       # measures API lookup speed under load
 │   ├── merge/main.go          # combines all worker results into one link graph
 │   ├── pagerank/main.go       # scores every domain from the merged graph
@@ -81,6 +82,7 @@ Linkscope/
 │   ├── extract/               # runs a WAT file through parallel parser goroutines
 │   ├── fixture/               # builds fake Common Crawl files for tests
 │   ├── index/                 # sharded backlink index: build, open, look up a site
+│   ├── linkcheck/             # live page checks: broken, moved, soft 404, robots.txt, polite pacing
 │   ├── jobs/                  # SQLite job list: claims, leases, retries, status, event log
 │   ├── links/                 # URL → domain, which links count, domain and page link graphs
 │   ├── loadtest/              # runs many lookups at once and records latencies
