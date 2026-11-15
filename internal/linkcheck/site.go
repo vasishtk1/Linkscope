@@ -2,8 +2,10 @@ package linkcheck
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 )
@@ -113,4 +115,33 @@ func (c *Checker) loadHost(ctx context.Context, host string, h *hostInfo) {
 		return
 	}
 	h.result, h.reason = Unknown, describe(lastErr)
+}
+
+// Get downloads a file politely (robots.txt, pacing, our User-Agent), reading at most limit bytes.
+func (c *Checker) Get(ctx context.Context, rawURL string, limit int64) (int, []byte, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return 0, nil, err
+	}
+	h := c.host(ctx, u.Host)
+	if h.reason != "" {
+		return 0, nil, errors.New(h.reason)
+	}
+	if !h.robots.Allowed(u.EscapedPath()) {
+		return 0, nil, ErrRobots
+	}
+	r, err := c.fetch(ctx, http.MethodGet, rawURL, limit)
+	return r.status, r.body, err
+}
+
+// Sitemaps lists the sitemaps a host's robots.txt points to, or /sitemap.xml when it names none.
+func (c *Checker) Sitemaps(ctx context.Context, host string) []string {
+	h := c.host(ctx, host)
+	if h.reason != "" {
+		return nil
+	}
+	if len(h.robots.Sitemaps) > 0 {
+		return h.robots.Sitemaps
+	}
+	return []string{h.scheme + "://" + host + "/sitemap.xml"}
 }

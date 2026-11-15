@@ -4,7 +4,8 @@ import "strings"
 
 // Robots holds the robots.txt rules that apply to our bot on one host.
 type Robots struct {
-	rules []rule
+	rules    []rule
+	Sitemaps []string
 }
 
 type rule struct {
@@ -18,6 +19,7 @@ var allowAll = &Robots{}
 func ParseRobots(text, token string) *Robots {
 	token = strings.ToLower(token)
 	var mine, star []rule
+	var sitemaps []string
 	foundMine := false
 	var agents []string
 	inRules := false
@@ -32,6 +34,10 @@ func ParseRobots(text, token string) *Robots {
 		key = strings.ToLower(strings.TrimSpace(key))
 		val = strings.TrimSpace(val)
 		switch key {
+		case "sitemap":
+			if val != "" {
+				sitemaps = append(sitemaps, val)
+			}
 		case "user-agent":
 			if inRules {
 				agents, inRules = nil, false
@@ -58,9 +64,9 @@ func ParseRobots(text, token string) *Robots {
 		}
 	}
 	if foundMine {
-		return &Robots{rules: mine}
+		return &Robots{rules: mine, Sitemaps: sitemaps}
 	}
-	return &Robots{rules: star}
+	return &Robots{rules: star, Sitemaps: sitemaps}
 }
 
 // Allowed applies the longest matching rule; Allow wins a tie, and no match means allowed.

@@ -88,6 +88,7 @@ Linkscope/
 │   ├── loadtest/              # runs many lookups at once and records latencies
 │   ├── merge/                 # combines worker results: link graph, origins, top pages
 │   ├── pagerank/              # PageRank over the domain graph, 0–100 scores
+│   ├── redirect/              # sitemap reading and address matching to pick redirect targets
 │   ├── record/                # saves a run's files, workers and event log for replay
 │   ├── serve/                 # lookup API routes: /lookup, /known, /network, /run, /stats
 │   ├── validate/              # rank agreement with Common Crawl's published ranks

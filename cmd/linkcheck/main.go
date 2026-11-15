@@ -14,12 +14,21 @@ import (
 
 	"github.com/vasishtk1/Linkscope/internal/index"
 	"github.com/vasishtk1/Linkscope/internal/linkcheck"
-	"github.com/vasishtk1/Linkscope/internal/merge"
+	"github.com/vasishtk1/Linkscope/internal/redirect"
 )
 
 type row struct {
 	linkcheck.Check
-	Sites int `json:"sites"`
+	Sites      int                  `json:"sites"`
+	Suggestion *redirect.Suggestion `json:"suggestion,omitempty"`
+}
+
+type config struct {
+	dir, site      string
+	limit, workers int
+	opts           linkcheck.Options
+	asJSON         bool
+	suggest        bool
 }
 
 func main() {
@@ -30,6 +39,7 @@ func main() {
 	interval := flag.Duration("interval", time.Second, "time between requests")
 	timeout := flag.Duration("timeout", 10*time.Second, "time limit per request")
 	asJSON := flag.Bool("json", false, "print JSON instead of a table")
+	suggest := flag.Bool("suggest", false, "pick a live page to redirect each broken page to, using the site's sitemap")
 	flag.Parse()
 	if *site == "" || flag.NArg() != 0 || *limit < 1 || *workers < 1 || *interval <= 0 {
 		flag.Usage()
@@ -37,14 +47,19 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	o := linkcheck.Options{Timeout: *timeout, Interval: *interval}
-	if err := run(ctx, *dir, *site, *limit, *workers, o, *asJSON); err != nil {
+	cfg := config{
+		dir: *dir, site: *site, limit: *limit, workers: *workers,
+		opts:   linkcheck.Options{Timeout: *timeout, Interval: *interval},
+		asJSON: *asJSON, suggest: *suggest,
+	}
+	if err := run(ctx, cfg); err != nil {
 		fmt.Fprintln(os.Stderr, "linkcheck:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, dir, site string, limit, workers int, o linkcheck.Options, asJSON bool) error {
+func run(ctx context.Context, cfg config) error {
+	dir, site := cfg.dir, cfg.site
 	ix, err := index.Open(dir)
 	if err != nil {
 		return err
@@ -61,43 +76,135 @@ func run(ctx context.Context, dir, site string, limit, workers int, o linkcheck.
 	if len(top) == 0 {
 		return fmt.Errorf("%s has no page-level data for %s (built before page links were added?)", dir, e.Domain)
 	}
-	top = top[:min(limit, len(top))]
+	top = top[:min(cfg.limit, len(top))]
 	pages := make([]string, len(top))
 	for i, p := range top {
 		pages[i] = p.Page
 	}
 
-	c := linkcheck.New(o)
+	c := linkcheck.New(cfg.opts)
 	defer c.Close()
 	start := time.Now()
-	checks := c.CheckAll(ctx, pages, workers)
-	took := time.Since(start)
+	checks := c.CheckAll(ctx, pages, cfg.workers)
 
 	rows := make([]row, len(checks))
 	for i := range checks {
 		rows[i] = row{Check: checks[i], Sites: top[i].Sites}
 	}
-	if asJSON {
+	var sitemaps map[string]redirect.Sitemap
+	if cfg.suggest {
+		sitemaps = suggest(ctx, c, rows)
+	}
+	took := time.Since(start)
+
+	if cfg.asJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(map[string]any{"site": e.Domain, "tookMs": took.Milliseconds(), "pages": rows})
+		out := map[string]any{"site": e.Domain, "tookMs": took.Milliseconds(), "pages": rows}
+		if sitemaps != nil {
+			out["sitemaps"] = sitemaps
+		}
+		return enc.Encode(out)
 	}
-	printTable(os.Stdout, e.Domain, top, rows, took)
+	printTable(os.Stdout, e.Domain, rows, cfg.suggest, took)
+	printSitemaps(os.Stdout, sitemaps)
 	return ctx.Err()
 }
 
-func printTable(w io.Writer, domain string, top []merge.TopPage, rows []row, took time.Duration) {
+// suggest reads the sitemap of each host with a lost page once, then picks a redirect target for every lost page.
+func suggest(ctx context.Context, c *linkcheck.Checker, rows []row) map[string]redirect.Sitemap {
+	sitemaps := map[string]redirect.Sitemap{}
+	for i := range rows {
+		if !lost(rows[i].Check) {
+			continue
+		}
+		host, _, _ := strings.Cut(rows[i].Page, "/")
+		sm, ok := sitemaps[host]
+		if !ok {
+			sm = redirect.ReadSitemaps(ctx, c, c.Sitemaps(ctx, host))
+			sitemaps[host] = sm
+		}
+		s := redirect.Suggest(ctx, c, rows[i].Page, sm.Pages)
+		rows[i].Suggestion = &s
+	}
+	return sitemaps
+}
+
+func lost(c linkcheck.Check) bool {
+	return c.Result == linkcheck.Broken || c.Result == linkcheck.Homepage
+}
+
+func printTable(w io.Writer, domain string, rows []row, withSuggestions bool, took time.Duration) {
 	tw := tabwriter.NewWriter(w, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(tw, "PAGE\tLINKING SITES\tRESULT")
+	if withSuggestions {
+		fmt.Fprintln(tw, "PAGE\tLINKING SITES\tRESULT\tSEND VISITORS TO")
+	} else {
+		fmt.Fprintln(tw, "PAGE\tLINKING SITES\tRESULT")
+	}
 	counts := map[linkcheck.Result]int{}
+	matched := 0
 	for _, r := range rows {
 		counts[r.Result]++
-		fmt.Fprintf(tw, "%s\t%d\t%s\n", label(r.Page, domain), r.Sites, describe(r.Check, domain))
+		line := fmt.Sprintf("%s\t%d\t%s", label(r.Page, domain), r.Sites, describe(r.Check, domain))
+		if r.Suggestion == nil {
+			if withSuggestions {
+				line += "\t"
+			}
+			fmt.Fprintln(tw, line)
+			continue
+		}
+		if r.Suggestion.Target != "" {
+			matched++
+		}
+		target, why := explain(*r.Suggestion, domain)
+		fmt.Fprintf(tw, "%s\t%s\n", line, target)
+		for _, l := range why {
+			fmt.Fprintf(tw, "\t\t\t  %s\n", l)
+		}
 	}
 	tw.Flush()
 	fmt.Fprintf(w, "\n%s: checked %d pages in %.1fs. %d ok, %d broken, %d redirect to the homepage, %d couldn't check, %d skipped by robots.txt\n",
 		domain, len(rows), took.Seconds(), counts[linkcheck.OK], counts[linkcheck.Broken], counts[linkcheck.Homepage],
 		counts[linkcheck.Unknown], counts[linkcheck.Skipped])
+	if withSuggestions {
+		fmt.Fprintf(w, "Redirect targets: %d of %d broken or homepage-redirected pages have a clear match\n",
+			matched, counts[linkcheck.Broken]+counts[linkcheck.Homepage])
+	}
+}
+
+// explain is the suggestion column plus the "why" lines printed under it.
+func explain(s redirect.Suggestion, domain string) (string, []string) {
+	var why []string
+	if s.Pick != nil {
+		w := fmt.Sprintf("why: shares %q", strings.Join(s.Pick.Shared, ", "))
+		if s.Pick.SameSection {
+			w += ", same section"
+		}
+		why = append(why, fmt.Sprintf("%s (score %.2f)", w, s.Pick.Score))
+	}
+	if s.RunnerUp != nil {
+		why = append(why, fmt.Sprintf("runner-up: %s (score %.2f)", label(bare(s.RunnerUp.URL), domain), s.RunnerUp.Score))
+	}
+	if s.Target != "" {
+		return label(bare(s.Target), domain), why
+	}
+	if s.Pick != nil {
+		why[0] = strings.Replace(why[0], "why:", "closest: "+label(bare(s.Pick.URL), domain)+",", 1)
+	}
+	return "no clear match (" + s.NoMatch + ")", why
+}
+
+func printSitemaps(w io.Writer, sitemaps map[string]redirect.Sitemap) {
+	for host, sm := range sitemaps {
+		note := ""
+		switch {
+		case sm.Capped && len(sm.Pages) >= redirect.MaxPages:
+			note = fmt.Sprintf(", stopped at the %d-page limit", redirect.MaxPages)
+		case sm.Capped:
+			note = fmt.Sprintf(", stopped at the %d-file limit", redirect.MaxSitemapFiles)
+		}
+		fmt.Fprintf(w, "Sitemap for %s: %d files read, %d failed, %d pages%s\n", host, sm.Files, sm.Failed, len(sm.Pages), note)
+	}
 }
 
 func describe(c linkcheck.Check, domain string) string {

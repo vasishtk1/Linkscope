@@ -45,7 +45,7 @@ page from the index: "example.com/old-pricing"
 
 ### `Robots`
 
-The rules from one robots.txt that apply to us. A zero `Robots` (`allowAll`) allows everything.
+The rules from one robots.txt that apply to us, plus `Sitemaps`: the `Sitemap:` addresses the file lists. Phase 2 reads those addresses. `Sitemap:` lines belong to the whole file, not to a bot group. A zero `Robots` (`allowAll`) allows everything.
 
 ### `ParseRobots(text, token string) *Robots`
 
@@ -128,6 +128,14 @@ Blocks until the ticker gives the next turn, or until the context is cancelled. 
 
 `loadHost` tries `https://host/robots.txt`, then `http://`. The first scheme that answers at all is used for every page on that host. If neither answers, every page on the host is `unknown` with the connection error, without trying each page separately.
 
+### `(c *Checker) Get(ctx, rawURL string, limit int64) (int, []byte, error)`
+
+Downloads a file, such as a sitemap, with the same manners as page checks: the host's robots.txt (returns `ErrRobots` if blocked), the shared pace and our User-Agent. Phase 2 uses it through its `Fetcher` interface. Unlike page checks, a body that fails halfway is an error, because a cut-off sitemap would be misread.
+
+### `(c *Checker) Sitemaps(ctx, host string) []string`
+
+The sitemap addresses from the host's robots.txt. If it lists none, it returns `/sitemap.xml` on the scheme the host answered on. It reads robots.txt only if this host hasn't been seen yet. Returns nothing if the host can't be reached.
+
 ## Tests
 
 `check_test.go` runs a fake site on a local test server (`httptest`). Nothing touches the internet. It covers:
@@ -142,7 +150,7 @@ Blocks until the ticker gives the next turn, or until the context is cancelled. 
 
 The fake server only speaks http, so every test also exercises the https → http fallback.
 
-`robots_test.go` covers groups, our group replacing `*`, longest match, ties, `*` and `$`, comments, upper and lower case, groups that name several bots, and rules outside any group.
+`robots_test.go` covers `Sitemap:` lines, groups, our group replacing `*`, longest match, ties, `*` and `$`, comments, upper and lower case, groups that name several bots, and rules outside any group.
 
 ## Measured (2026-11-15, demo index, 1 request per second, 2 in flight)
 

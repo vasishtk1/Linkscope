@@ -345,6 +345,7 @@ make build
 ./bin/linkcheck -site fansided.com                      # top 30 pages of a site in the demo index
 ./bin/linkcheck -site wordpress.org -limit 100          # more pages
 ./bin/linkcheck -site fansided.com -json > checks.json  # for the next phase
+./bin/linkcheck -site fansided.com -suggest             # also pick a page to redirect each broken one to
 ```
 
 | Flag | Default | Meaning |
@@ -356,6 +357,7 @@ make build
 | `-interval` | `1s` | Time between requests |
 | `-timeout` | `10s` | Time limit per request, redirects included |
 | `-json` | off | Print JSON instead of a table |
+| `-suggest` | off | For each broken page, or page sent to the homepage, read the site's sitemap and pick a live page to redirect it to, with the reason (see [redirect.md](redirect.md)) |
 
 Ctrl+C stops it cleanly: requests still waiting become `couldn't check (stopped)` and the table is still printed.
 
@@ -363,13 +365,35 @@ Ctrl+C stops it cleanly: requests still waiting become `couldn't check (stopped)
 
 Parses flags, sets up a context that's cancelled on Ctrl+C, and calls `run`.
 
-### `run(ctx, dir, site string, limit, workers int, o linkcheck.Options, asJSON bool) error`
+### `config`
 
-Opens the index, finds the site the same way the search box does (`index.Normalize` + `Resolve`), takes its first `limit` top pages, which are already sorted by linking sites, checks them with `CheckAll`, and prints a table or JSON. Each JSON row is a `linkcheck.Check` plus `sites`, the number of linking sites. Embedding the struct puts its fields at the top level of the row.
+All the flag values in one struct, so `run` takes one argument instead of eight.
 
-### `printTable(w, domain, top, rows, took)`
+### `run(ctx, cfg config) error`
 
-Prints one line per page and a summary line with the time taken and a count of each result. `text/tabwriter` lines up the columns.
+Opens the index, finds the site the same way the search box does (`index.Normalize` + `Resolve`), takes its first `limit` top pages, which are already sorted by linking sites, checks them with `CheckAll`, and prints a table or JSON. Each JSON row is a `linkcheck.Check` plus `sites`, the number of linking sites. Embedding the struct puts its fields at the top level of the row. With `-suggest`, each lost page's row also gets a `suggestion`, and the JSON gets a `sitemaps` summary per host.
+
+### `suggest(ctx, c *linkcheck.Checker, rows []row) map[string]redirect.Sitemap`
+
+For each broken page or page sent to the homepage, it reads that host's sitemap (once per host, cached in the map) and calls `redirect.Suggest`. It uses the same checker as the page checks, so the sitemap downloads and the check of the picked page follow the same pace and robots.txt rules.
+
+### `explain(s redirect.Suggestion, domain string) (string, []string)`
+
+The text in the "send visitors to" column, and the "why" lines printed under it:
+```
+/mobile   1   broken (410)   /fansided-mobile-app
+                               why: shares "mobile" (score 0.50)
+                               runner-up: /mobile-app-account-deletion (score 0.25)
+```
+Without a match, the column gives the reason, and the first line shows the closest page and what it shared.
+
+### `printSitemaps(w, sitemaps)`
+
+One line per host: sitemap files read, files that failed, pages found, and whether the file or page limit stopped it.
+
+### `printTable(w, domain, rows, withSuggestions, took)`
+
+Prints one line per page and a summary line with the time taken and a count of each result. With suggestions, it adds a fourth column, the "why" lines, and a count of clear matches. `text/tabwriter` lines up the columns, but only across lines with the same number of cells, so with suggestions every line gets the fourth cell, even an empty one.
 
 ### `describe(c linkcheck.Check, domain string) string`
 

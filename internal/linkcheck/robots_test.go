@@ -29,3 +29,10 @@ func TestRobots(t *testing.T) {
 		})
 	}
 }
+
+func TestRobotsSitemaps(t *testing.T) {
+	r := ParseRobots("Sitemap: https://example.com/a.xml\nUser-agent: *\nDisallow: /x\nsitemap: https://example.com/b.xml # news\n", robotsToken)
+	if len(r.Sitemaps) != 2 || r.Sitemaps[0] != "https://example.com/a.xml" || r.Sitemaps[1] != "https://example.com/b.xml" {
+		t.Errorf("Sitemaps = %v", r.Sitemaps)
+	}
+}

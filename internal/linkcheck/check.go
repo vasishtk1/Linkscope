@@ -29,7 +29,10 @@ const (
 	maxRobots    = 500 << 10
 )
 
-var errTooManyRedirects = errors.New("too many redirects")
+var (
+	errTooManyRedirects = errors.New("too many redirects")
+	ErrRobots           = errors.New("blocked by robots.txt")
+)
 
 // Check is the outcome for one page.
 type Check struct {
@@ -94,7 +97,7 @@ func (c *Checker) fetch(ctx context.Context, method, rawURL string, limit int64)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, limit))
-	if err != nil && limit == maxRobots {
+	if err != nil && limit > bodyPeek {
 		return response{}, err
 	}
 	return response{status: resp.StatusCode, final: resp.Request.URL.String(), body: body}, nil

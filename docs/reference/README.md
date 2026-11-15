@@ -19,6 +19,7 @@ Every package and function, documented here instead of in code comments. Each en
 | [internal/serve](serve.md) | The lookup API's HTTP routes |
 | [internal/loadtest](loadtest.md) | Measures lookup throughput and latency against the API |
 | [internal/linkcheck](linkcheck.md) | Checks whether a site's most linked pages still work (phase 1 of the pull request agent) |
+| [internal/redirect](redirect.md) | Reads a site's sitemap and picks a live page to redirect each broken page to (phase 2) |
 | [internal/fixture](#internalfixture) | Builds fake Common Crawl files for tests |
 | [web/](web.md) | The website: pages, API routes, animated graph |
 | [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge`, `pagerank`, `validate`, `index`, `api`, `loadtest`, `record`, `slicewat`, `linkcheck` |
