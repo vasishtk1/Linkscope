@@ -291,3 +291,10 @@ The agent page. The site box starts filled in with `fansided.com` and the run st
 - **`Change`** shows the redirect file. The new lines slide in once a redirect is found.
 - A site without a recorded run gets a short note listing the ones that exist.
 
+### `analytics.tsx` — `Analytics`
+
+Vercel Web Analytics, rendered once in `layout.tsx` so every page view is counted. It uses no cookies and sends nothing in development, so visits on `localhost` never count.
+
+- **`skipOwnVisits(event)`** is the `beforeSend` hook, which can drop a visit before it's sent. Opening any page with `?notrack=1` saves a flag in that browser's `localStorage`, and from then on its visits are dropped. `?notrack=0` removes the flag. The parameter is removed from the address that gets recorded. If `localStorage` isn't available (some private windows), the visit is counted as normal.
+- Analytics also has to be turned on in the Vercel project's Analytics tab.
+
