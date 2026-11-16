@@ -17,4 +17,5 @@
   - Phase 1 done: `cmd/linkcheck` finds a site's most linked pages that are broken (404/410) or redirect to the homepage, respecting robots.txt ([reference](reference/linkcheck.md))
   - Phase 2 done: `linkcheck -suggest` reads the site's sitemap and picks a live page to redirect each broken page to, by address words, only when it's a clear winner that loads ([reference](reference/redirect.md))
   - Phase 3 done: `cmd/redirects` adds those redirects to the site repo's `vercel.json`, `_redirects` or `netlify.toml`, first in the file and without changing anything else ([reference](reference/redirectfile.md))
-  - Next: Gemini for unclear matches, open the pull request
+  - Phase 4 done: `linkcheck -gemini` asks Gemini about pages the matching leaves unclear, showing it the Internet Archive's title for the dead page and the titles of the 10 closest live pages; only a confident pick from that list that loads is used. `-trace` shows each step live, with Gemini's thinking ([reference](reference/gemini.md))
+  - Next: open the pull request (GitHub App), then the website's live agent view

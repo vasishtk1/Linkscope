@@ -1,6 +1,6 @@
 # internal/redirect
 
-Picks a live page to send visitors to for each broken page. It's phase 2 of the pull request agent. Phase 1 ([linkcheck.md](linkcheck.md)) finds pages that are broken but still have sites linking to them. This package reads the site's sitemap and picks the live page whose address matches best, only if it's a clear winner and actually loads. It uses no AI. Unclear cases are left as "no clear match" for a later phase (Gemini).
+Picks a live page to send visitors to for each broken page. It's phase 2 of the pull request agent. Phase 1 ([linkcheck.md](linkcheck.md)) finds pages that are broken but still have sites linking to them. This package reads the site's sitemap and picks the live page whose address matches best, only if it's a clear winner and actually loads. Matching uses no AI. Unclear cases are left as "no clear match", and with `-gemini` they go to `Ask` (below), which has Gemini decide.
 
 ```
 broken page: fansided.com/mobile
@@ -104,7 +104,46 @@ Ranks the live pages and checks the clear winner. If the winner doesn't load, it
 - `top two are too close to call`: less than 0.15 apart.
 - `the best matches didn't load`
 
+### `Suggestion.By`, `Suggestion.AI`
+
+`By` says who chose the target: `address` (this matching) or `gemini`. `AI` holds Gemini's answer whenever it was asked, even if nothing was picked, so its reason can be shown.
+
+## ask.go
+
+Phase 4: has Gemini decide a page that address matching left unclear. The Gemini client itself is in [gemini.md](gemini.md). This file chooses what to ask and decides whether to trust the answer.
+
+### `Question`, `Answer`, `Picker`, `Describer`
+
+- `Question`: the lost page, what the Internet Archive says it was, and the candidates with their titles.
+- `Answer`: `Choice` (a URL or empty), `Confidence`, `Reason`, `Thinking` and the `Model` that answered.
+- `Picker` is anything that answers a `Question` (the Gemini client). `Describer` reads titles (`pagemeta.Reader`).
+
+Both are interfaces, like `Fetcher` and `Verifier`, so tests use fakes and never call the API. The types live here rather than in the Gemini package, so this package doesn't depend on Google's SDK.
+
+### `Ask(ctx, p Picker, d Describer, v Verifier, s Suggestion, live []string, log *trace.Log) Suggestion`
+
+1. Ranks the live pages as usual and keeps the top `MaxChoices` (10). If no page shares a word, there's nothing to choose from and Gemini isn't asked.
+2. Reads the archive copy of the lost page, and the titles of the 10 candidates.
+3. Asks the `Picker`.
+4. **Checks the answer.** It becomes a redirect only if all of these hold:
+   - **The choice is on the list** (`matchChoice`). An address Gemini made up counts as "none".
+   - **The choice isn't empty.** "None fit" is a valid answer.
+   - **Confidence is `high`.** Otherwise it's "Gemini unsure", and the leaning is kept for a person to see.
+   - **The page loads**, checked with the same checker as phase 1.
+5. Logs every step to the trace, with Gemini's thinking attached to its decision.
+
+A failed request keeps the original "no clear match" reason, plus "; Gemini failed".
+
+### `matchChoice(choice string, cands []pagemeta.Info) string`
+
+Returns the choice only if it's exactly one of the candidate URLs.
+
 ## Tests
+
+`ask_test.go`, with a fake picker, describer and verifier:
+- a confident pick, "none fit", a medium-confidence answer, an invented address, a pick that doesn't load, and a failed request;
+- that the question carries the archive title and candidate titles;
+- no request when no page shares a word, and at most 10 candidates.
 
 `redirect_test.go` uses no network:
 - **word splitting:** filler, IDs, accents, repeats;

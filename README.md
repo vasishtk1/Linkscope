@@ -82,17 +82,20 @@ Linkscope/
 │   ├── coordinator/           # coordinator HTTP server, lease reaper, file list loading
 │   ├── extract/               # runs a WAT file through parallel parser goroutines
 │   ├── fixture/               # builds fake Common Crawl files for tests
+│   ├── gemini/                # asks Gemini to pick a redirect target when matching can't decide
 │   ├── index/                 # sharded backlink index: build, open, look up a site
 │   ├── linkcheck/             # live page checks: broken, moved, soft 404, robots.txt, polite pacing
 │   ├── jobs/                  # SQLite job list: claims, leases, retries, status, event log
 │   ├── links/                 # URL → domain, which links count, domain and page link graphs
 │   ├── loadtest/              # runs many lookups at once and records latencies
 │   ├── merge/                 # combines worker results: link graph, origins, top pages
+│   ├── pagemeta/              # page titles from live pages and the Internet Archive
 │   ├── pagerank/              # PageRank over the domain graph, 0–100 scores
 │   ├── redirect/              # sitemap reading and address matching to pick redirect targets
 │   ├── redirectfile/          # edits vercel.json, _redirects or netlify.toml without touching anything else
 │   ├── record/                # saves a run's files, workers and event log for replay
 │   ├── serve/                 # lookup API routes: /lookup, /known, /network, /run, /stats
+│   ├── trace/                 # records each step the agent takes, for -trace and the website
 │   ├── validate/              # rank agreement with Common Crawl's published ranks
 │   ├── warc/                  # reads records out of WARC/WAT files
 │   ├── wat/                   # parses WAT JSON into pages and links

@@ -118,6 +118,10 @@ Checks many pages with a small pool of goroutines, the same pattern as the extra
 - Each goroutine writes its result into its own slot of the output slice. Two goroutines never write the same slot, so no lock is needed, and the results come back in the input order (most linked pages first).
 - `sync.WaitGroup.Go` starts each goroutine and `Wait` blocks until all of them finish.
 
+### `(c *Checker) CheckEach(ctx, pages []string, workers int, done func(Check)) []Check`
+
+`CheckAll` plus a callback that gets each result as soon as it's ready, so `-trace` can print checks live instead of after the last one. `CheckAll` is `CheckEach` with a nil callback. The callback runs in the worker goroutines, so it has to be safe to call from two goroutines at once (`trace.Log` is).
+
 ### `(c *Checker) wait(ctx) error`
 
 Blocks until the ticker gives the next turn, or until the context is cancelled. A `time.Ticker` drops ticks nobody is waiting for, so pauses never build up into a burst of requests afterwards.

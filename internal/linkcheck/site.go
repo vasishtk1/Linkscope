@@ -51,6 +51,11 @@ func (c *Checker) Close() { c.tick.Stop() }
 
 // CheckAll checks pages with at most workers requests in flight, returning results in the same order.
 func (c *Checker) CheckAll(ctx context.Context, pages []string, workers int) []Check {
+	return c.CheckEach(ctx, pages, workers, nil)
+}
+
+// CheckEach is CheckAll that also calls done with each result as soon as it's ready; done may be nil.
+func (c *Checker) CheckEach(ctx context.Context, pages []string, workers int, done func(Check)) []Check {
 	out := make([]Check, len(pages))
 	jobs := make(chan int)
 	var wg sync.WaitGroup
@@ -58,6 +63,9 @@ func (c *Checker) CheckAll(ctx context.Context, pages []string, workers int) []C
 		wg.Go(func() {
 			for i := range jobs {
 				out[i] = c.Check(ctx, pages[i])
+				if done != nil {
+					done(out[i])
+				}
 			}
 		})
 	}

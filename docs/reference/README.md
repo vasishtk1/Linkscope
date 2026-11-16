@@ -20,6 +20,9 @@ Every package and function, documented here instead of in code comments. Each en
 | [internal/loadtest](loadtest.md) | Measures lookup throughput and latency against the API |
 | [internal/linkcheck](linkcheck.md) | Checks whether a site's most linked pages still work (phase 1 of the pull request agent) |
 | [internal/redirect](redirect.md) | Reads a site's sitemap and picks a live page to redirect each broken page to (phase 2) |
+| [internal/pagemeta](pagemeta.md) | Reads page titles from live pages and from the Internet Archive's copy of dead ones |
+| [internal/gemini](gemini.md) | Asks Gemini to pick a redirect target when address matching can't decide (phase 4) |
+| [internal/trace](trace.md) | Records each step the agent takes, for `-trace` and the website's agent view |
 | [internal/redirectfile](redirectfile.md) | Adds those redirects to the site repo's `vercel.json`, `_redirects` or `netlify.toml` (phase 3) |
 | [internal/fixture](#internalfixture) | Builds fake Common Crawl files for tests |
 | [web/](web.md) | The website: pages, API routes, animated graph |

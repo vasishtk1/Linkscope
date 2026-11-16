@@ -12,9 +12,12 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/vasishtk1/Linkscope/internal/gemini"
 	"github.com/vasishtk1/Linkscope/internal/index"
 	"github.com/vasishtk1/Linkscope/internal/linkcheck"
+	"github.com/vasishtk1/Linkscope/internal/pagemeta"
 	"github.com/vasishtk1/Linkscope/internal/redirect"
+	"github.com/vasishtk1/Linkscope/internal/trace"
 )
 
 type row struct {
@@ -29,6 +32,10 @@ type config struct {
 	opts           linkcheck.Options
 	asJSON         bool
 	suggest        bool
+	trace          bool
+	gemini         bool
+	geminiMax      int
+	model          string
 }
 
 func main() {
@@ -40,8 +47,12 @@ func main() {
 	timeout := flag.Duration("timeout", 10*time.Second, "time limit per request")
 	asJSON := flag.Bool("json", false, "print JSON instead of a table")
 	suggest := flag.Bool("suggest", false, "pick a live page to redirect each broken page to, using the site's sitemap")
+	showTrace := flag.Bool("trace", false, "print each step as it happens (to stderr)")
+	useGemini := flag.Bool("gemini", false, "ask Gemini to decide pages the address matching leaves unclear (implies -suggest)")
+	geminiMax := flag.Int("gemini-max", 20, "most Gemini requests in one run")
+	model := flag.String("gemini-model", gemini.DefaultModels, "Gemini models, tried in order when one is busy")
 	flag.Parse()
-	if *site == "" || flag.NArg() != 0 || *limit < 1 || *workers < 1 || *interval <= 0 {
+	if *site == "" || flag.NArg() != 0 || *limit < 1 || *workers < 1 || *interval <= 0 || *geminiMax < 1 {
 		flag.Usage()
 		os.Exit(2)
 	}
@@ -50,7 +61,8 @@ func main() {
 	cfg := config{
 		dir: *dir, site: *site, limit: *limit, workers: *workers,
 		opts:   linkcheck.Options{Timeout: *timeout, Interval: *interval},
-		asJSON: *asJSON, suggest: *suggest,
+		asJSON: *asJSON, suggest: *suggest || *useGemini,
+		trace: *showTrace, gemini: *useGemini, geminiMax: *geminiMax, model: *model,
 	}
 	if err := run(ctx, cfg); err != nil {
 		fmt.Fprintln(os.Stderr, "linkcheck:", err)
@@ -82,10 +94,27 @@ func run(ctx context.Context, cfg config) error {
 		pages[i] = p.Page
 	}
 
+	var out io.Writer
+	if cfg.trace {
+		out = os.Stderr
+	}
+	log := trace.New(out)
+	var ai redirect.Picker
+	if cfg.gemini {
+		g, err := gemini.New(ctx, gemini.Key(".env"), cfg.model)
+		if err != nil {
+			return err
+		}
+		ai = g
+	}
+
 	c := linkcheck.New(cfg.opts)
 	defer c.Close()
 	start := time.Now()
-	checks := c.CheckAll(ctx, pages, cfg.workers)
+	log.Say("start", "", "checking the %d most linked pages of %s", len(pages), e.Domain)
+	checks := c.CheckEach(ctx, pages, cfg.workers, func(chk linkcheck.Check) {
+		log.Say("check", chk.Page, "%s", describe(chk, e.Domain))
+	})
 
 	rows := make([]row, len(checks))
 	for i := range checks {
@@ -93,41 +122,66 @@ func run(ctx context.Context, cfg config) error {
 	}
 	var sitemaps map[string]redirect.Sitemap
 	if cfg.suggest {
-		sitemaps = suggest(ctx, c, rows)
+		sitemaps = suggest(ctx, c, rows, ai, cfg.geminiMax, log)
 	}
+	log.Say("done", "", "finished in %.1fs", time.Since(start).Seconds())
 	took := time.Since(start)
 
 	if cfg.asJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		out := map[string]any{"site": e.Domain, "tookMs": took.Milliseconds(), "pages": rows}
+		res := map[string]any{"site": e.Domain, "tookMs": took.Milliseconds(), "pages": rows, "steps": log.Events()}
 		if sitemaps != nil {
-			out["sitemaps"] = sitemaps
+			res["sitemaps"] = sitemaps
 		}
-		return enc.Encode(out)
+		return enc.Encode(res)
 	}
 	printTable(os.Stdout, e.Domain, rows, cfg.suggest, took)
 	printSitemaps(os.Stdout, sitemaps)
 	return ctx.Err()
 }
 
-// suggest reads the sitemap of each host with a lost page once, then picks a redirect target for every lost page.
-func suggest(ctx context.Context, c *linkcheck.Checker, rows []row) map[string]redirect.Sitemap {
+// suggest reads the sitemap of each host with a lost page once, then picks a redirect target for every lost page, asking ai (if set) about unclear ones.
+func suggest(ctx context.Context, c *linkcheck.Checker, rows []row, ai redirect.Picker, aiMax int, log *trace.Log) map[string]redirect.Sitemap {
 	sitemaps := map[string]redirect.Sitemap{}
+	asked := 0
 	for i := range rows {
-		if !lost(rows[i].Check) {
+		if !lost(rows[i].Check) || ctx.Err() != nil {
 			continue
 		}
 		host, _, _ := strings.Cut(rows[i].Page, "/")
 		sm, ok := sitemaps[host]
 		if !ok {
+			log.Say("sitemap", "", "reading the sitemap of %s to see which pages are live", host)
 			sm = redirect.ReadSitemaps(ctx, c, c.Sitemaps(ctx, host))
 			sitemaps[host] = sm
+			log.Say("sitemap", "", "%d files read, %d live pages", sm.Files, len(sm.Pages))
 		}
 		s := redirect.Suggest(ctx, c, rows[i].Page, sm.Pages)
+		log.Say("match", s.Page, "%s", matchStep(s))
+		if s.Target == "" && ai != nil && len(sm.Pages) > 0 {
+			if asked < aiMax {
+				asked++
+				s = redirect.Ask(ctx, ai, pagemeta.Reader{F: c}, c, s, sm.Pages, log)
+			} else if asked == aiMax {
+				asked++
+				log.Say("ask", "", "reached the limit of %d Gemini requests, leaving the rest unclear", aiMax)
+			}
+		}
 		rows[i].Suggestion = &s
 	}
 	return sitemaps
+}
+
+// matchStep describes the address matching's result in one line for the trace.
+func matchStep(s redirect.Suggestion) string {
+	if s.Target != "" {
+		return fmt.Sprintf("comparing addresses: clear winner %s (score %.2f, shares %q), and it loads", bare(s.Target), s.Pick.Score, strings.Join(s.Pick.Shared, ", "))
+	}
+	if s.Pick != nil {
+		return fmt.Sprintf("comparing addresses: no clear match (%s), closest %s (score %.2f)", s.NoMatch, bare(s.Pick.URL), s.Pick.Score)
+	}
+	return "comparing addresses: no clear match (" + s.NoMatch + ")"
 }
 
 func lost(c linkcheck.Check) bool {
@@ -175,6 +229,16 @@ func printTable(w io.Writer, domain string, rows []row, withSuggestions bool, to
 // explain is the suggestion column plus the "why" lines printed under it.
 func explain(s redirect.Suggestion, domain string) (string, []string) {
 	var why []string
+	if s.AI != nil {
+		if s.Target != "" {
+			return label(bare(s.Target), domain), []string{"picked by Gemini: " + s.AI.Reason}
+		}
+		why = append(why, "Gemini: "+s.AI.Reason)
+		if s.AI.Choice != "" {
+			why[0] = fmt.Sprintf("Gemini leaned to %s (%s confidence): %s", label(bare(s.AI.Choice), domain), s.AI.Confidence, s.AI.Reason)
+		}
+		return "no clear match (" + s.NoMatch + ")", why
+	}
 	if s.Pick != nil {
 		w := fmt.Sprintf("why: shares %q", strings.Join(s.Pick.Shared, ", "))
 		if s.Pick.SameSection {

@@ -346,6 +346,7 @@ make build
 ./bin/linkcheck -site wordpress.org -limit 100          # more pages
 ./bin/linkcheck -site fansided.com -json > checks.json  # for the next phase
 ./bin/linkcheck -site fansided.com -suggest             # also pick a page to redirect each broken one to
+./bin/linkcheck -site fansided.com -gemini -trace       # ask Gemini about unclear ones, and show each step live
 ```
 
 | Flag | Default | Meaning |
@@ -358,6 +359,10 @@ make build
 | `-timeout` | `10s` | Time limit per request, redirects included |
 | `-json` | off | Print JSON instead of a table |
 | `-suggest` | off | For each broken page, or page sent to the homepage, read the site's sitemap and pick a live page to redirect it to, with the reason (see [redirect.md](redirect.md)) |
+| `-gemini` | off | Also ask Gemini about pages the address matching leaves unclear (see [gemini.md](gemini.md)). Turns on `-suggest`. Needs `GEMINI_API_KEY` in the environment or in `.env` in the current folder |
+| `-gemini-max` | `20` | Most Gemini requests in one run |
+| `-gemini-model` | `gemini-3.8-flash,gemini-3.5-flash,gemini-3.1-flash-lite` | Models to use, the next one tried when one is busy |
+| `-trace` | off | Print each step as it happens, to stderr, so it doesn't mix with `-json` on stdout (see [trace.md](trace.md)) |
 
 Ctrl+C stops it cleanly: requests still waiting become `couldn't check (stopped)` and the table is still printed.
 
@@ -371,11 +376,15 @@ All the flag values in one struct, so `run` takes one argument instead of eight.
 
 ### `run(ctx, cfg config) error`
 
-Opens the index, finds the site the same way the search box does (`index.Normalize` + `Resolve`), takes its first `limit` top pages, which are already sorted by linking sites, checks them with `CheckAll`, and prints a table or JSON. Each JSON row is a `linkcheck.Check` plus `sites`, the number of linking sites. Embedding the struct puts its fields at the top level of the row. With `-suggest`, each lost page's row also gets a `suggestion`, and the JSON gets a `sitemaps` summary per host.
+Opens the index, finds the site the same way the search box does (`index.Normalize` + `Resolve`), takes its first `limit` top pages, which are already sorted by linking sites, checks them with `CheckAll`, and prints a table or JSON. Each JSON row is a `linkcheck.Check` plus `sites`, the number of linking sites. Embedding the struct puts its fields at the top level of the row. With `-suggest`, each lost page's row also gets a `suggestion`, and the JSON gets a `sitemaps` summary per host. The JSON always includes `steps`, the trace of the run. Checks go through `CheckEach`, so each result is logged the moment it's ready.
 
-### `suggest(ctx, c *linkcheck.Checker, rows []row) map[string]redirect.Sitemap`
+### `suggest(ctx, c, rows, ai redirect.Picker, aiMax int, log *trace.Log) map[string]redirect.Sitemap`
 
-For each broken page or page sent to the homepage, it reads that host's sitemap (once per host, cached in the map) and calls `redirect.Suggest`. It uses the same checker as the page checks, so the sitemap downloads and the check of the picked page follow the same pace and robots.txt rules.
+For each broken page or page sent to the homepage, it reads that host's sitemap (once per host, cached in the map) and calls `redirect.Suggest`. If that finds no target and `ai` is set, it calls `redirect.Ask`, at most `aiMax` times per run. Every step goes to the trace. It uses the same checker as the page checks, so the sitemap downloads and the check of the picked page follow the same pace and robots.txt rules.
+
+### `matchStep(s redirect.Suggestion) string`
+
+The address matching's result as one trace line: the clear winner and what it shares, or the reason there's none and the closest page.
 
 ### `explain(s redirect.Suggestion, domain string) (string, []string)`
 
@@ -385,7 +394,7 @@ The text in the "send visitors to" column, and the "why" lines printed under it:
                                why: shares "mobile" (score 0.50)
                                runner-up: /mobile-app-account-deletion (score 0.25)
 ```
-Without a match, the column gives the reason, and the first line shows the closest page and what it shared.
+Without a match, the column gives the reason, and the first line shows the closest page and what it shared. When Gemini was asked, the line shows its reason instead: `picked by Gemini: ...`, or what it leaned to and how sure it was.
 
 ### `printSitemaps(w, sitemaps)`
 

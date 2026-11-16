@@ -15,6 +15,8 @@ type Suggestion struct {
 	Pick     *Candidate `json:"pick,omitempty"`
 	RunnerUp *Candidate `json:"runnerUp,omitempty"`
 	NoMatch  string     `json:"noMatch,omitempty"`
+	By       string     `json:"by,omitempty"`
+	AI       *Answer    `json:"ai,omitempty"`
 }
 
 // Verifier checks that a picked page loads; linkcheck.Checker does this.
@@ -38,6 +40,7 @@ func Suggest(ctx context.Context, v Verifier, page string, live []string) Sugges
 				s.Target = chk.FinalURL
 			}
 			s.Pick = &best
+			s.By = "address"
 			if len(ranked) > 1 {
 				s.RunnerUp = &ranked[1]
 			}
