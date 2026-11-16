@@ -408,3 +408,44 @@ The text in the result column, for example `broken (410)`, `ok, redirects to /im
 Shows just the path for pages on the site itself (`/licenses/by/4.0`), and host + path for subdomains (`de.wordpress.org/support`), like the website's "Most linked pages" card.
 
 Measured on 2026-11-15 on five real sites (105 pages in total, 157s): about 1.5 seconds per page at 1 request per second, robots.txt included. It found 10 broken pages and 1 that redirects to the homepage. See the table in [linkcheck.md](linkcheck.md#measured-2026-11-15-demo-index-1-request-per-second-2-in-flight).
+
+## cmd/redirects
+
+Adds the redirects that `linkcheck -suggest` picked to a site repo's redirect file. It's phase 3 of the pull request agent. See [redirectfile.md](redirectfile.md) for which files it handles and the rules it follows.
+
+```sh
+./bin/linkcheck -site fansided.com -suggest -json > checks.json
+./bin/redirects -in checks.json -repo ../my-site            # show what would change
+./bin/redirects -in checks.json -repo ../my-site -write     # save it
+./bin/linkcheck -site example.com -suggest -json | ./bin/redirects -repo ../my-site -create vercel
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `-in` | `-` | The JSON from `linkcheck -suggest -json`, or `-` to read it from the pipe |
+| `-repo` | required | Folder of the site's repo |
+| `-create` | none | If the repo has no redirect file, make `vercel.json` (`vercel`) or `public/_redirects` (`netlify`) |
+| `-write` | off | Save the file. Without it, nothing is written, so the first run is always a preview |
+
+Example output:
+```
+vercel.json: 1 redirect to add
+  /mobile → /fansided-mobile-app  (1 linking site)
+Nothing saved. Run again with -write to save the file.
+```
+
+### `main()`
+
+Parses and checks the flags, then calls `run`.
+
+### `checks`
+
+The parts of `linkcheck`'s JSON this needs: each page, its linking sites and its suggestion. Go's JSON decoder ignores the other fields, so the two commands only share what matters.
+
+### `run(w, in, repo, create string, write bool) error`
+
+Turns every suggestion with a target into a `redirectfile.Redirect`, finds the redirect file (or the one `-create` names), reads it, calls `redirectfile.Apply`, and prints what would be added and what was skipped with the reason. With `-write`, it saves the file, keeping its file permissions. Pages are already sorted by linking sites, so the most linked ones come first in the file.
+
+### `readChecks(in string) (checks, error)`, `plural(n, word)`
+
+`readChecks` reads the JSON from a file or stdin. `plural` writes "1 linking site" but "2 linking sites".

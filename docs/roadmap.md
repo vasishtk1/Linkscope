@@ -16,4 +16,5 @@
 - GitHub App that opens pull requests to fix SEO problems found with the backlink index (redirects for dead pages that still receive backlinks, broken outbound links)
   - Phase 1 done: `cmd/linkcheck` finds a site's most linked pages that are broken (404/410) or redirect to the homepage, respecting robots.txt ([reference](reference/linkcheck.md))
   - Phase 2 done: `linkcheck -suggest` reads the site's sitemap and picks a live page to redirect each broken page to, by address words, only when it's a clear winner that loads ([reference](reference/redirect.md))
-  - Next: Gemini for unclear matches, edit the site's redirect file, open the pull request
+  - Phase 3 done: `cmd/redirects` adds those redirects to the site repo's `vercel.json`, `_redirects` or `netlify.toml`, first in the file and without changing anything else ([reference](reference/redirectfile.md))
+  - Next: Gemini for unclear matches, open the pull request

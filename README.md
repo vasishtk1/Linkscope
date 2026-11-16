@@ -73,6 +73,7 @@ Linkscope/
 │   ├── merge/main.go          # combines all worker results into one link graph
 │   ├── pagerank/main.go       # scores every domain from the merged graph
 │   ├── record/main.go         # saves a finished run to JSON for the website replay
+│   ├── redirects/main.go      # adds the picked redirects to a site repo's redirect file
 │   ├── slicewat/main.go       # cuts a WAT file into small files of real pages for the demo
 │   ├── validate/main.go       # compares our ranking with Common Crawl's
 │   └── worker/main.go         # claims jobs, processes files, reports back
@@ -89,6 +90,7 @@ Linkscope/
 │   ├── merge/                 # combines worker results: link graph, origins, top pages
 │   ├── pagerank/              # PageRank over the domain graph, 0–100 scores
 │   ├── redirect/              # sitemap reading and address matching to pick redirect targets
+│   ├── redirectfile/          # edits vercel.json, _redirects or netlify.toml without touching anything else
 │   ├── record/                # saves a run's files, workers and event log for replay
 │   ├── serve/                 # lookup API routes: /lookup, /known, /network, /run, /stats
 │   ├── validate/              # rank agreement with Common Crawl's published ranks
