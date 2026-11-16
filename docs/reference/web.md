@@ -68,6 +68,10 @@ The saved run the Go API was started with (`cmd/api -run`, see [record.md](recor
 
 The `/pipeline` page: the shared header (with "Pipeline" marked as the current page), the same blue glow as the home page, and the `Pipeline` component inside `<Suspense>`, because it reads `?search=` from the URL. It doesn't use the animated network background, which would compete with the pipeline animation.
 
+### `agent/page.tsx`
+
+The `/agent` page: the shared header with "Agent" marked, the blue glow, and the `Agent` component.
+
 ## lib/
 
 ### `api.ts`
@@ -106,6 +110,19 @@ The replay engine. Plain functions with no React, so the same code drives both t
 - **`focusProgress(focus, frame)`** counts the focused files finished by this frame and the linking pages they've added. At the end of a replay it equals the site's linking pages: on the saved demo run, github.com's two files add up to its 484 pages.
 - **`fileLabel`, `fmt`, `clock`:** short file names, numbers with commas, and `m:ss` times.
 
+### `agent.ts`
+
+Data and helpers for the agent page.
+
+- **`RUNS`** holds recorded runs, keyed by site. Each one is a file in `lib/agent-runs/`, made from `linkcheck -gemini -trace -json` plus the `vercel.json` before and after `cmd/redirects`. Only the broken pages and their suggestions are kept, together with every trace step, Gemini's thinking included. Nothing secret is in them.
+- **`STAGES`** lists the agent's five stages and which trace steps belong to each. "Open pull request" is marked `soon` until the GitHub App is built. `stageOf(step)` gives a step's stage.
+- **`schedule(steps)`** decides when each step appears in the replay. Short gaps keep 60% of their real length, at least 0.3s and at most 2.2s, so an 18s sitemap read doesn't stall the page. A step with thinking also gets time for the thinking to type out at `TYPE_RATE` characters per second.
+- **`realTime(steps, times, now)`** maps the replay clock back to the run's own clock, interpolating between steps, so the timer shows the agent's real pace.
+- **`diffLines(before, after)`** is a longest-common-subsequence line diff. Config files are tiny, so the O(n·m) table is fine.
+- **`pathOf(page, site)`** shows a page as its path on the main site, or host plus path on a subdomain.
+
+This is a replay for now. The plan is to run the agent on the server and stream its steps (server-sent events) in the same shape, so the page keeps working unchanged.
+
 ### `searches.ts`
 
 Remembers the sites you've searched, on this device only, so the Pipeline page can replay each one.
@@ -129,7 +146,7 @@ Checked with a small Node script: empty, broken and wrong-shape values give an e
 
 ### `site-header.tsx` — `SiteHeader`
 
-The header on both pages: the logo (a link home, which also clears a search) plus "Pipeline" and "GitHub" links. `active="pipeline"` highlights the Pipeline link and sets `aria-current="page"` for screen readers.
+The header on every page: the logo (a link home, which also clears a search) plus "Pipeline", "Agent" and "GitHub" links. `active="pipeline"` or `active="agent"` highlights that link and sets `aria-current="page"` for screen readers.
 
 ### `linkscope.tsx` — `Linkscope`
 
@@ -261,3 +278,16 @@ First 15 rows with a toggle to show every loaded row ("Show all", or "Show top 1
 ### `download-csv.tsx` — `DownloadCsv`
 
 The download button at the bottom of the page.
+
+### `agent.tsx` — `Agent`
+
+The agent page. The site box starts filled in with `fansided.com` and the run starts on its own after 0.7s.
+
+- **Playback:** a `requestAnimationFrame` loop moves `now` forward (times 2 at 2x speed). A step shows once its scheduled time has passed, so pause, resume and skip only change `now` and `status`.
+- **Stats:** pages checked, problems found, redirects proposed and Gemini requests are counted from the steps shown so far, so they count up with the run.
+- **`Stages`** highlights the stage of the latest step.
+- **`Timeline`** prints each step with its real time and a colored tag, scrolls to the newest one, and shows "waiting for Gemini" or "reading sitemap files" during long waits. **`Thinking`** types Gemini's reasoning out character by character in a collapsible block.
+- **`problemState(p, shown)`** says where the agent is with each broken page (waiting, matching, asking Gemini, redirect found, no good replacement), from that page's `match` and `decide` steps. **`Findings`** lists the pages with that state, the redirect target and who picked it, or Gemini's reason.
+- **`Change`** shows the redirect file. The new lines slide in once a redirect is found.
+- A site without a recorded run gets a short note listing the ones that exist.
+

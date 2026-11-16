@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export function SiteHeader({ active }: { active?: "pipeline" }) {
+export function SiteHeader({ active }: { active?: "pipeline" | "agent" }) {
   const link = (on: boolean) => `text-sm transition ${on ? "text-zinc-100" : "text-zinc-400 hover:text-zinc-100"}`;
   return (
     <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
@@ -11,6 +11,9 @@ export function SiteHeader({ active }: { active?: "pipeline" }) {
       <nav className="flex items-center gap-6">
         <Link href="/pipeline" className={link(active === "pipeline")} aria-current={active === "pipeline" ? "page" : undefined}>
           Pipeline
+        </Link>
+        <Link href="/agent" className={link(active === "agent")} aria-current={active === "agent" ? "page" : undefined}>
+          Agent
         </Link>
         <a href="https://github.com/vasishtk1/Linkscope" className={link(false)}>
           GitHub

@@ -1,0 +1,186 @@
+{
+ "site": "fansided.com",
+ "recorded": "2026-11-16",
+ "tookMs": 75283,
+ "checked": 15,
+ "problems": [
+  {
+   "page": "fansided.com/fansided-openings",
+   "result": "homepage",
+   "status": 200,
+   "sites": 5,
+   "suggestion": {
+    "noMatch": "Gemini: none fit",
+    "ai": {
+     "confidence": "high",
+     "reason": "None of the candidate pages relate to job or contributor opportunities at FanSided; all are sports news articles about coaching and stadium openings.",
+     "model": "gemini-3.5-flash"
+    }
+   }
+  },
+  {
+   "page": "fansided.com/mobile",
+   "result": "broken",
+   "status": 410,
+   "sites": 1,
+   "suggestion": {
+    "target": "https://fansided.com/fansided-mobile-app",
+    "by": "address"
+   }
+  }
+ ],
+ "steps": [
+  {
+   "at": 0,
+   "step": "start",
+   "text": "checking the 15 most linked pages of fansided.com"
+  },
+  {
+   "at": 3.21,
+   "step": "check",
+   "page": "daily.fansided.com/",
+   "text": "ok, redirects to /newsletters"
+  },
+  {
+   "at": 4.335,
+   "step": "check",
+   "page": "fansided.com/",
+   "text": "ok"
+  },
+  {
+   "at": 5.069,
+   "step": "check",
+   "page": "fansided.com/accessibility-policy",
+   "text": "ok"
+  },
+  {
+   "at": 6.327,
+   "step": "check",
+   "page": "fansided.com/contact",
+   "text": "ok"
+  },
+  {
+   "at": 7.085,
+   "step": "check",
+   "page": "fansided.com/cookies",
+   "text": "ok"
+  },
+  {
+   "at": 8.287,
+   "step": "check",
+   "page": "fansided.com/fansided-openings",
+   "text": "redirects to the homepage"
+  },
+  {
+   "at": 9.089,
+   "step": "check",
+   "page": "fansided.com/network",
+   "text": "ok"
+  },
+  {
+   "at": 10.075,
+   "step": "check",
+   "page": "fansided.com/privacy",
+   "text": "ok"
+  },
+  {
+   "at": 11.055,
+   "step": "check",
+   "page": "fansided.com/terms",
+   "text": "ok"
+  },
+  {
+   "at": 12.056,
+   "step": "check",
+   "page": "fansided.com/website-legal-disclaimer",
+   "text": "ok"
+  },
+  {
+   "at": 13.212,
+   "step": "check",
+   "page": "fansided.com/pitch-a-story",
+   "text": "ok"
+  },
+  {
+   "at": 14.193,
+   "step": "check",
+   "page": "fansided.com/network/local",
+   "text": "ok"
+  },
+  {
+   "at": 15.161,
+   "step": "check",
+   "page": "fansided.com/how-to-pitch-a-story-to-fansided",
+   "text": "ok, redirects to /pitch-a-story/"
+  },
+  {
+   "at": 17.246,
+   "step": "check",
+   "page": "fansided.com/network/extra",
+   "text": "ok"
+  },
+  {
+   "at": 18.119,
+   "step": "check",
+   "page": "fansided.com/mobile",
+   "text": "broken (410)"
+  },
+  {
+   "at": 18.119,
+   "step": "sitemap",
+   "text": "reading the sitemap of fansided.com to see which pages are live"
+  },
+  {
+   "at": 36.622,
+   "step": "sitemap",
+   "text": "14 files read, 50000 live pages"
+  },
+  {
+   "at": 36.715,
+   "step": "match",
+   "page": "fansided.com/fansided-openings",
+   "text": "comparing addresses: no clear match (closest page is too different), closest fansided.com/posts/ranking-4-current-wnba-head-coach-openings (score 0.12)"
+  },
+  {
+   "at": 40.727,
+   "step": "archive",
+   "page": "fansided.com/fansided-openings",
+   "text": "the Internet Archive's copy from 20230819 was titled \"FanSided Openings - Become a FanSided Contributor, Expert, or Podcaster today.\""
+  },
+  {
+   "at": 40.727,
+   "step": "read",
+   "page": "fansided.com/fansided-openings",
+   "text": "reading the titles of the 10 closest live pages"
+  },
+  {
+   "at": 49.263,
+   "step": "ask",
+   "page": "fansided.com/fansided-openings",
+   "text": "asking Gemini which page replaces it, if any"
+  },
+  {
+   "at": 75.093,
+   "step": "decide",
+   "page": "fansided.com/fansided-openings",
+   "text": "none of them fit: None of the candidate pages relate to job or contributor opportunities at FanSided; all are sports news articles about coaching and stadium openings.",
+   "thinking": "**My Assessment of the FanSided Openings Page Search**\n\nOkay, so the goal here is pretty clear: find a replacement page for the lost FanSided job openings page at `https://fansided.com/fansided-openings`. I need to identify a URL that serves a similar purpose, something that speaks to opportunities to join FanSided as a contributor, expert, or podcaster – a careers page essentially.\n\nI've been presented with a list of candidates, numbered 1 through 10. My initial scan confirms what I suspected; they're all news articles, and they're all focused on coaching or stadium openings within WNBA, MLB, NFL, and NBA. None of them, and I mean *none* of them, are remotely relevant to the FanSided job openings page I'm looking for.\n\nThe rule here is crucial: if no candidate fits, I need to return an empty choice rather than a bad redirect. A wrong answer is far more detrimental than acknowledging that I couldn't find a direct replacement. Given the data, there's absolutely no suitable candidate. Therefore, my choice will be an empty string, and my confidence level will be high. The reason is simple: the proposed candidates are entirely unrelated to the function of the original page. They're news stories about sports vacancies, not career opportunities within FanSided. I am sure that none of these are related to my search."
+  },
+  {
+   "at": 75.283,
+   "step": "match",
+   "page": "fansided.com/mobile",
+   "text": "comparing addresses: clear winner fansided.com/fansided-mobile-app (score 0.50, shares \"mobile\"), and it loads"
+  },
+  {
+   "at": 75.283,
+   "step": "done",
+   "text": "finished in 75.3s"
+  }
+ ],
+ "file": {
+  "path": "vercel.json",
+  "before": "{\n  \"cleanUrls\": true,\n  \"trailingSlash\": false\n}\n",
+  "after": "{\n  \"cleanUrls\": true,\n  \"trailingSlash\": false,\n  \"redirects\": [\n    {\n      \"source\": \"/mobile\",\n      \"destination\": \"/fansided-mobile-app\",\n      \"permanent\": true\n    }\n  ]\n}\n"
+ }
+}
