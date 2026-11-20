@@ -72,6 +72,7 @@ Linkscope/
 │   ├── loadtest/main.go       # measures API lookup speed under load
 │   ├── merge/main.go          # combines all worker results into one link graph
 │   ├── pagerank/main.go       # scores every domain from the merged graph
+│   ├── pr/                    # opens a pull request with the redirects on a site's GitHub repo (main.go, body.go)
 │   ├── record/main.go         # saves a finished run to JSON for the website replay
 │   ├── redirects/main.go      # adds the picked redirects to a site repo's redirect file
 │   ├── slicewat/main.go       # cuts a WAT file into small files of real pages for the demo
@@ -80,9 +81,11 @@ Linkscope/
 ├── internal/
 │   ├── api/                   # request/response types shared by coordinator and worker
 │   ├── coordinator/           # coordinator HTTP server, lease reaper, file list loading
+│   ├── envfile/               # reads settings from the environment or a .env file
 │   ├── extract/               # runs a WAT file through parallel parser goroutines
 │   ├── fixture/               # builds fake Common Crawl files for tests
 │   ├── gemini/                # asks Gemini to pick a redirect target when matching can't decide
+│   ├── github/                # GitHub App sign-in and the repo calls for opening a pull request (+ githubtest/ fake GitHub)
 │   ├── index/                 # sharded backlink index: build, open, look up a site
 │   ├── linkcheck/             # live page checks: broken, moved, soft 404, robots.txt, polite pacing
 │   ├── jobs/                  # SQLite job list: claims, leases, retries, status, event log

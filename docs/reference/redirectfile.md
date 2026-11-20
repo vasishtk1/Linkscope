@@ -44,6 +44,10 @@ The file belongs to the site owner, and the change will show up in a pull reques
 
 `Kind` is one of `vercel.json`, `_redirects`, `netlify.toml`. `Find` returns the first file from the table above as a `File` (its path inside the repo plus its kind), or `ErrNoFile`.
 
+### `Places() []File`
+
+The same table as a list, in order, for repos that aren't on disk. `cmd/pr` asks GitHub for each path in turn and uses the first one that exists.
+
 ### `Redirect`, `New(page, target string) Redirect`
 
 A redirect from a path to a target. `New` turns phase 2's output into one: the page `fansided.com/mobile` becomes `/mobile`. The target becomes just its path (and query) when it's on the same site, `www.` or not, and stays a full URL when it's on another host, such as a subdomain. Paths are kept exactly as they appear in addresses, so `%C3%A9` stays encoded, which is what the hosts expect.

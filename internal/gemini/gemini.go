@@ -1,18 +1,17 @@
 package gemini
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"google.golang.org/genai"
 
+	"github.com/vasishtk1/Linkscope/internal/envfile"
 	"github.com/vasishtk1/Linkscope/internal/redirect"
 )
 
@@ -201,20 +200,4 @@ func orNone(s string) string {
 }
 
 // Key returns GEMINI_API_KEY from the environment, or from a .env file at path.
-func Key(path string) string {
-	if k := os.Getenv("GEMINI_API_KEY"); k != "" {
-		return k
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		if v, ok := strings.CutPrefix(strings.TrimSpace(sc.Text()), "GEMINI_API_KEY="); ok {
-			return strings.Trim(strings.TrimSpace(v), `"'`)
-		}
-	}
-	return ""
-}
+func Key(path string) string { return envfile.Get(path, "GEMINI_API_KEY") }

@@ -24,9 +24,11 @@ Every package and function, documented here instead of in code comments. Each en
 | [internal/gemini](gemini.md) | Asks Gemini to pick a redirect target when address matching can't decide (phase 4) |
 | [internal/trace](trace.md) | Records each step the agent takes, for `-trace` and the website's agent view |
 | [internal/redirectfile](redirectfile.md) | Adds those redirects to the site repo's `vercel.json`, `_redirects` or `netlify.toml` (phase 3) |
+| [internal/github](github.md) | Signs in as a GitHub App and reads, branches, commits and opens pull requests through GitHub's API (phase 5) |
+| [internal/envfile](envfile.md) | Reads a setting from the environment or a `.env` file |
 | [internal/fixture](#internalfixture) | Builds fake Common Crawl files for tests |
 | [web/](web.md) | The website: pages, API routes, animated graph |
-| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge`, `pagerank`, `validate`, `index`, `api`, `loadtest`, `record`, `slicewat`, `linkcheck`, `redirects` |
+| [cmd/](cmd.md) | The runnable programs: `extract`, `coordinator`, `worker`, `merge`, `pagerank`, `validate`, `index`, `api`, `loadtest`, `record`, `slicewat`, `linkcheck`, `redirects`, `pr` |
 
 ## How the packages connect
 

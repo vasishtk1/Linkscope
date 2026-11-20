@@ -56,6 +56,15 @@ type Result struct {
 	Skipped []Skip     `json:"skipped"`
 }
 
+// Places lists where redirect files are looked for, in order, for repos that aren't on disk.
+func Places() []File {
+	fs := make([]File, len(places))
+	for i, p := range places {
+		fs[i] = File{Path: p.path, Kind: p.kind}
+	}
+	return fs
+}
+
 // Find returns the first redirect file in the repo folder, or ErrNoFile.
 func Find(repo string) (File, error) {
 	for _, p := range places {

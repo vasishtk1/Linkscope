@@ -458,3 +458,116 @@ Turns every suggestion with a target into a `redirectfile.Redirect`, finds the r
 ### `readChecks(in string) (checks, error)`, `plural(n, word)`
 
 `readChecks` reads the JSON from a file or stdin. `plural` writes "1 linking site" but "2 linking sites".
+
+## cmd/pr
+
+Opens a pull request with the redirects on a site's GitHub repo. It's phase 5 of the pull request agent, and it does what `cmd/redirects` does, but on GitHub instead of a folder. See [github.md](github.md) for how it signs in.
+
+```sh
+./bin/linkcheck -site fansided.com -gemini -json > checks.json
+./bin/pr -in checks.json -repo vasishtk1/linkscope-demo-site          # preview: reads the repo, changes nothing
+./bin/pr -in checks.json -repo vasishtk1/linkscope-demo-site -open    # opens the pull request
+```
+
+It needs two settings, in `.env` or the environment:
+
+```
+GITHUB_APP_ID=123456
+GITHUB_APP_KEY=~/.linkscope/github-app.pem
+```
+
+The key file stays outside the repo. `*.pem` is in `.gitignore`, and the local pre-commit hook refuses `.pem` files and anything that looks like a private key.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `-in` | `-` | The JSON from `linkcheck -suggest -json` (or `-gemini -json`), or `-` for the pipe |
+| `-repo` | required | `owner/name` of the site's repo. The app must be installed on it |
+| `-create` | none | If the repo has no redirect file, make `vercel.json` (`vercel`) or `public/_redirects` (`netlify`) |
+| `-open` | off | Open the pull request. Without it, nothing on GitHub changes |
+| `-trace` | off | Print each GitHub step to stderr |
+| `-env` | `.env` | Where to read the two settings from |
+
+What it does, in order:
+1. Turns each page with a target into a redirect, as `cmd/redirects` does.
+2. Signs in, then gets the default branch.
+3. Stops if a Linkscope pull request (branch starting with `linkscope/redirects-`) is already open, so the same redirects aren't proposed twice.
+4. Reads the first redirect file that exists on the default branch and runs `redirectfile.Apply`.
+5. Prints the title, the description and the whole new file.
+6. Only with `-open`:
+   - creates `linkscope/redirects-YYYY-MM-DD` from the default branch's latest commit
+   - saves the file there as one commit
+   - opens the pull request
+   - prints its link
+
+It never merges, and it never commits to the default branch.
+
+Tried 2026-11-20 on a private test repo with the recorded fansided run:
+- The preview signed in and read `vercel.json` in 4.0s.
+- `-open` created the branch at 2.7s, saved `vercel.json` at 3.9s and opened pull request #1 at 5.4s. The pull request came from the app, with `/mobile` → `/fansided-mobile-app` in the table and `/fansided-openings` listed with Gemini's reason.
+
+### `config`, `main()`
+
+All flag values in one struct. `baseURL` and `now` aren't flags; tests set them to use the fake GitHub and a fixed date. `main` stops cleanly on Ctrl+C through the context.
+
+### `run(ctx, w, cfg config, log *trace.Log) error`
+
+The steps above. Each GitHub action goes to the trace (`github` steps), ready for the website's agent view.
+
+### `redirects(c checks) ([]redirectfile.Redirect, map[string]page)`
+
+The redirects to add, plus each one's page keyed by path, so the description can show linking sites and the reason.
+
+### `loadApp(cfg config) (*github.App, error)`
+
+Reads `GITHUB_APP_ID` and `GITHUB_APP_KEY` with [envfile.Get](envfile.md), expands `~/`, and loads the key. Missing settings get a message saying which ones and where.
+
+### `findFile(ctx, repo, ref, create)`
+
+Tries each path from `redirectfile.Places()` on the branch. With none found, it starts an empty file if `-create` is set, or returns `ErrNoFile` with a hint.
+
+### `newBranch(ctx, repo, name, sha) (string, error)`
+
+Creates the branch, adding `-2`, `-3`... up to `-9` if an earlier run today already used the name (for example, a pull request that was closed).
+
+### `readChecks(in)`, `printSkipped(w, skipped)`
+
+Read the JSON, and list redirects that `Apply` skipped with the reason.
+
+## cmd/pr/body.go
+
+### `prTitle(n int) string`
+
+"Redirect 1 broken page that other sites still link to", or the plural.
+
+### `prBody(c, res, fixed, file) string`
+
+The description, in Markdown:
+
+```
+Linkscope found pages on fansided.com that are broken but still get links from other websites. This adds permanent redirects to `vercel.json` ...
+
+| Broken page | Linking sites | Redirects to | Picked by | Why |
+|---|---|---|---|---|
+| `/mobile` | 1 | `/fansided-mobile-app` | address match | shares "mobile" (score 0.50) |
+
+**Not redirected** (no live page is a good replacement):
+- `/fansided-openings`: Gemini: None of the candidate pages relate to job or contributor opportunities...
+
+Please check each target before merging. Linkscope never merges on its own.
+```
+
+Skipped redirects get their own list. Pages with no good replacement are listed too, so the reviewer sees what was looked at and left alone.
+
+### `reason(p page) (by, why string)`, `cell(s string) string`
+
+`reason` says who picked the target (Gemini with its reason, or address matching with the shared words and score). `cell` escapes `|` and line breaks so a title can't break the table.
+
+### Tests
+
+`main_test.go` runs the whole command against the fake GitHub:
+- a preview prints the table, the "not redirected" list and the new file, and writes nothing
+- `-open` creates the branch, saves `vercel.json` with the redirect while keeping `cleanUrls`, opens pull request #1, and leaves `main` alone
+- a second run stops because #1 is open
+- after it's closed, a run on the same day uses a `-2` branch
+- a repo with no redirect file gets a `-create` hint, and with `-create netlify`, a new `public/_redirects`
+- a bad `-repo` and missing settings give clear errors

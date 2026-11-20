@@ -72,7 +72,7 @@ Separates answer parts from thought parts.
 
 ### `Key(path string) string`
 
-The API key from the `GEMINI_API_KEY` environment variable, or from a `.env` file. `.env` is in `.gitignore`, and a local pre-commit hook blocks committing it or the key. The key is never printed or logged.
+The API key from the `GEMINI_API_KEY` environment variable, or from a `.env` file, through [envfile.Get](envfile.md). `.env` is in `.gitignore`, and a local pre-commit hook blocks committing it or the key. The key is never printed or logged.
 
 ## Tests
 

@@ -4,6 +4,7 @@
 # Downloaded Common Crawl files and pipeline output
 /data/
 
-# Local environment
+# Local environment and private keys
 .env
+*.pem
 .DS_Store
