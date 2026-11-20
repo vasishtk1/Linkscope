@@ -114,8 +114,15 @@ The replay engine. Plain functions with no React, so the same code drives both t
 
 Data and helpers for the agent page.
 
-- **`RUNS`** holds recorded runs, keyed by site. Each one is a file in `lib/agent-runs/`, made from `linkcheck -gemini -trace -json` plus the `vercel.json` before and after `cmd/redirects`. Only the broken pages and their suggestions are kept, together with every trace step, Gemini's thinking included. Nothing secret is in them.
-- **`STAGES`** lists the agent's five stages and which trace steps belong to each. "Open pull request" is marked `soon` until the GitHub App is built. `stageOf(step)` gives a step's stage.
+- **`RUNS`** holds recorded runs, keyed by site: fansided.com and cardplayer.com, both recorded 2026-11-16. Each one is a file in `lib/agent-runs/`, made from `linkcheck -gemini -trace -json` plus the `vercel.json` before and after `cmd/redirects`. The file keeps:
+  - the pages that are broken or sent to the homepage, with their suggestions
+  - how many pages the site blocked (`blocked`)
+  - every trace step, Gemini's thinking included
+- **`pr`** (fansided only) is the pull request `cmd/pr -open` really opened on 2026-11-20: repo, number, link, title, branch, author, and its steps with their times. One step's time wasn't saved, so it has no `at`.
+- Cardplayer has no `pr`, because none of its 4 broken pages had a good replacement.
+- Nothing secret is in these files.
+- **`STAGES`** lists the agent's five stages and which trace steps belong to each. The pull request steps use the step name `github`. `stageOf(step)` gives a step's stage.
+- **`prSchedule(steps)`** gives each pull request step its replay time, at the real pace (the whole thing took 5.4s). A step without a time goes halfway between its neighbors.
 - **`schedule(steps)`** decides when each step appears in the replay. Short gaps keep 60% of their real length, at least 0.3s and at most 2.2s, so an 18s sitemap read doesn't stall the page. A step with thinking also gets time for the thinking to type out at `TYPE_RATE` characters per second.
 - **`realTime(steps, times, now)`** maps the replay clock back to the run's own clock, interpolating between steps, so the timer shows the agent's real pace.
 - **`diffLines(before, after)`** is a longest-common-subsequence line diff. Config files are tiny, so the O(n·m) table is fine.
@@ -285,11 +292,38 @@ The agent page. The site box starts filled in with `fansided.com` and the run st
 
 - **Playback:** a `requestAnimationFrame` loop moves `now` forward (times 2 at 2x speed). A step shows once its scheduled time has passed, so pause, resume and skip only change `now` and `status`.
 - **Stats:** pages checked, problems found, redirects proposed and Gemini requests are counted from the steps shown so far, so they count up with the run.
-- **`Stages`** highlights the stage of the latest step.
-- **`Timeline`** prints each step with its real time and a colored tag, scrolls to the newest one, and shows "waiting for Gemini" or "reading sitemap files" during long waits. **`Thinking`** types Gemini's reasoning out character by character in a collapsible block.
+- **`Stages`** takes the active stage, how many are done, and a note for the last one: "ready" once the run is done and a pull request can be opened, or "not needed" when nothing was redirected.
+- **`Timeline`** prints each step with its real time (blank when none was recorded) and a colored tag, scrolls to the newest one, and shows "waiting for Gemini" or "reading sitemap files" during long waits. **`Thinking`** types Gemini's reasoning out character by character in a collapsible block.
 - **`problemState(p, shown)`** says where the agent is with each broken page (waiting, matching, asking Gemini, redirect found, no good replacement), from that page's `match` and `decide` steps. **`Findings`** lists the pages with that state, the redirect target and who picked it, or Gemini's reason.
-- **`Change`** shows the redirect file. The new lines slide in once a redirect is found.
-- A site without a recorded run gets a short note listing the ones that exist.
+- **`Findings`** also says how many pages the site blocked (403), so a visitor sees they were skipped, not guessed.
+- **`Change`** shows the redirect file. The new lines slide in once a redirect is found. If the run ends with nothing to add, it says so.
+- **Pull request flow:** after the run, `PullRequestPanel` (in `agent-pr.tsx`) takes over. `prT` is its own clock, `-1` until the button is pressed, moved forward by a second `requestAnimationFrame` loop, at 2x too. The pull request steps join the timeline once their time comes, and "Skip to end" also finishes this part.
+- The recorded runs show as buttons under the site box. A site without a recorded run gets a short note listing the ones that exist.
+
+### `agent-pr.tsx` — `PullRequestPanel`, `GitHubMark`
+
+The last stage of the agent page.
+
+1. **Before:** "The redirect is ready" with an **Open pull request** button carrying the GitHub logo.
+2. **Connect GitHub:** three steps tick off every `CONNECT_STEP` (0.9s):
+   - install the linkscope-agent GitHub App on the site's repo
+   - choose the repo
+   - connected
+
+   This shows what a site owner does on GitHub's own install page. In the demo, the app is already installed on the demo repo.
+3. **Opening:** "opening the pull request" while the timeline plays the real steps from `cmd/pr`.
+4. **`PrCard`:**
+   - an "Open" badge, the title and number, and "linkscope-agent[bot] wants to merge into main from linkscope/redirects-2026-11-20"
+   - the redirect table, with `why(p)` showing Gemini's reason or the shared words and score
+   - the pages left alone
+   - a **View pull request on GitHub** button that opens the real pull request on the public demo repo
+   - a line saying the demo repo stands in for the checked site, so nothing claims the pull request went to fansided.com itself
+
+A run with no `pr` gets a single card instead: no pull request needed, and why.
+
+`GitHubMark` is GitHub's logo as an inline SVG (the `mark-github` icon from GitHub's Octicons), used only on links to GitHub. lucide-react doesn't ship brand logos.
+
+When the agent runs live, step 2 will be the real install flow and step 3 will stream from the server.
 
 ### `analytics.tsx` — `Analytics`
 

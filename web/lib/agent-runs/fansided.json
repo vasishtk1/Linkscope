@@ -3,6 +3,7 @@
  "recorded": "2026-11-16",
  "tookMs": 75283,
  "checked": 15,
+ "blocked": 0,
  "problems": [
   {
    "page": "fansided.com/fansided-openings",
@@ -11,6 +12,13 @@
    "sites": 5,
    "suggestion": {
     "noMatch": "Gemini: none fit",
+    "pick": {
+     "path": "/posts/ranking-4-current-wnba-head-coach-openings",
+     "score": 0.125,
+     "shared": [
+      "openings"
+     ]
+    },
     "ai": {
      "confidence": "high",
      "reason": "None of the candidate pages relate to job or contributor opportunities at FanSided; all are sports news articles about coaching and stadium openings.",
@@ -25,7 +33,14 @@
    "sites": 1,
    "suggestion": {
     "target": "https://fansided.com/fansided-mobile-app",
-    "by": "address"
+    "by": "address",
+    "pick": {
+     "path": "/fansided-mobile-app",
+     "score": 0.5,
+     "shared": [
+      "mobile"
+     ]
+    }
    }
   }
  ],
@@ -182,5 +197,35 @@
   "path": "vercel.json",
   "before": "{\n  \"cleanUrls\": true,\n  \"trailingSlash\": false\n}\n",
   "after": "{\n  \"cleanUrls\": true,\n  \"trailingSlash\": false,\n  \"redirects\": [\n    {\n      \"source\": \"/mobile\",\n      \"destination\": \"/fansided-mobile-app\",\n      \"permanent\": true\n    }\n  ]\n}\n"
+ },
+ "pr": {
+  "repo": "vasishtk1/linkscope-demo-site",
+  "number": 1,
+  "url": "https://github.com/vasishtk1/linkscope-demo-site/pull/1",
+  "title": "Redirect 1 broken page that other sites still link to",
+  "branch": "linkscope/redirects-2026-11-20",
+  "author": "linkscope-agent[bot]",
+  "opened": "2026-11-20",
+  "steps": [
+   {
+    "at": 0.0,
+    "text": "signing in as the GitHub App on vasishtk1/linkscope-demo-site"
+   },
+   {
+    "text": "read vercel.json from main"
+   },
+   {
+    "at": 2.7,
+    "text": "created branch linkscope/redirects-2026-11-20"
+   },
+   {
+    "at": 3.9,
+    "text": "saved vercel.json on linkscope/redirects-2026-11-20"
+   },
+   {
+    "at": 5.4,
+    "text": "opened pull request #1"
+   }
+  ]
  }
 }

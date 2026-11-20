@@ -1,3 +1,4 @@
+import cardplayer from "./agent-runs/cardplayer.json";
 import fansided from "./agent-runs/fansided.json";
 
 export type Step = { at: number; step: string; page?: string; text: string; thinking?: string };
@@ -11,9 +12,21 @@ export type Problem = {
   suggestion?: {
     target?: string;
     by?: string;
+    pick?: { path?: string; score?: number; shared?: string[] };
     noMatch?: string;
     ai?: { choice?: string; confidence?: string; reason?: string; model?: string };
   };
+};
+
+export type PullRequest = {
+  repo: string;
+  number: number;
+  url: string;
+  title: string;
+  branch: string;
+  author: string;
+  opened: string;
+  steps: { at?: number; text: string }[];
 };
 
 export type Run = {
@@ -21,12 +34,14 @@ export type Run = {
   recorded: string;
   tookMs: number;
   checked: number;
+  blocked: number;
   problems: Problem[];
   steps: Step[];
   file: { path: string; before: string; after: string };
+  pr?: PullRequest;
 };
 
-export const RUNS: Record<string, Run> = { "fansided.com": fansided as Run };
+export const RUNS: Record<string, Run> = { "fansided.com": fansided as Run, "cardplayer.com": cardplayer as Run };
 export const DEFAULT_SITE = "fansided.com";
 
 // Stages of the agent, in order, and which trace steps belong to each.
@@ -35,8 +50,18 @@ export const STAGES = [
   { id: "match", label: "Match addresses", steps: ["sitemap", "match"] },
   { id: "ask", label: "Ask Gemini if unclear", steps: ["archive", "read", "ask", "decide"] },
   { id: "edit", label: "Edit redirect file", steps: ["done"] },
-  { id: "pr", label: "Open pull request", steps: [] as string[], soon: true },
+  { id: "pr", label: "Open pull request", steps: ["github"] },
 ] as const;
+
+// prSchedule spaces the pull request steps at their real pace; a step without a recorded time goes halfway between its neighbors.
+export function prSchedule(steps: { at?: number }[]) {
+  return steps.map((s, i) => {
+    if (s.at !== undefined) return s.at;
+    const before = steps.slice(0, i).reverse().find((x) => x.at !== undefined)?.at ?? 0;
+    const after = steps.slice(i + 1).find((x) => x.at !== undefined)?.at ?? before + 1;
+    return (before + after) / 2;
+  });
+}
 
 export function stageOf(step: string) {
   return STAGES.findIndex((s) => (s.steps as readonly string[]).includes(step));

@@ -1,0 +1,336 @@
+{
+ "site": "cardplayer.com",
+ "recorded": "2026-11-16",
+ "tookMs": 302241,
+ "checked": 15,
+ "blocked": 10,
+ "problems": [
+  {
+   "page": "cardplayer.com/de/casinos/online-casinos-oesterreich",
+   "result": "broken",
+   "status": 410,
+   "sites": 3,
+   "suggestion": {
+    "noMatch": "Gemini: none fit",
+    "pick": {
+     "path": "/poker-news/9729-tribal-casinos-to-offer-online-poker",
+     "score": 0.2,
+     "shared": [
+      "casinos",
+      "online"
+     ]
+    },
+    "ai": {
+     "confidence": "low",
+     "reason": "None of the candidates offer a comparison guide for online casinos in Austria.",
+     "model": "gemini-3.5-flash"
+    }
+   }
+  },
+  {
+   "page": "cardplayer.com/uk/betting/non-gamstop",
+   "result": "broken",
+   "status": 410,
+   "sites": 3,
+   "suggestion": {
+    "noMatch": "Gemini: none fit",
+    "pick": {
+     "path": "/poker-news/3067-betfair-launches-grosvenor-uk-poker-tour-betting-market",
+     "score": 0.16666666666666666,
+     "shared": [
+      "uk",
+      "betting"
+     ]
+    },
+    "ai": {
+     "confidence": "low",
+     "reason": "None of the candidates offer information about betting sites not on Gamstop, as they are all news articles about poker tournaments or industry business news.",
+     "model": "gemini-3.1-flash-lite"
+    }
+   }
+  },
+  {
+   "page": "cardplayer.com/de/casinos/plinko-casino",
+   "result": "broken",
+   "status": 410,
+   "sites": 2,
+   "suggestion": {
+    "noMatch": "Gemini: none fit",
+    "pick": {
+     "path": "/poker-news/13286-grosvenor-casino-owner-to-acquire-gala-casinos",
+     "score": 0.18181818181818182,
+     "shared": [
+      "casinos",
+      "casino"
+     ]
+    },
+    "ai": {
+     "confidence": "high",
+     "reason": "None of the available candidates offer a German guide or listing for Plinko online casinos.",
+     "model": "gemini-3.5-flash"
+    }
+   }
+  },
+  {
+   "page": "cardplayer.com/se/casino/trustly",
+   "result": "broken",
+   "status": 410,
+   "sites": 2,
+   "suggestion": {
+    "noMatch": "Gemini: none fit",
+    "pick": {
+     "path": "/poker-news/april-revenue-online-casino",
+     "score": 0.125,
+     "shared": [
+      "casino"
+     ]
+    },
+    "ai": {
+     "confidence": "high",
+     "reason": "None of the candidates match the Swedish online casino guide topic.",
+     "model": "gemini-3.5-flash"
+    }
+   }
+  }
+ ],
+ "steps": [
+  {
+   "at": 0,
+   "step": "start",
+   "text": "checking the 15 most linked pages of cardplayer.com"
+  },
+  {
+   "at": 4.022,
+   "step": "check",
+   "page": "cardplayer.com/online-casinos/best-bitcoin-casinos",
+   "text": "couldn't check (blocked 403)"
+  },
+  {
+   "at": 5.018,
+   "step": "check",
+   "page": "cardplayer.com/au/online-casinos",
+   "text": "couldn't check (blocked 403)"
+  },
+  {
+   "at": 8.531,
+   "step": "check",
+   "page": "cardplayer.com/de/casinos/online-casinos-oesterreich",
+   "text": "broken (410)"
+  },
+  {
+   "at": 9.019,
+   "step": "check",
+   "page": "cardplayer.com/online-casinos/offshore-casinos",
+   "text": "couldn't check (blocked 403)"
+  },
+  {
+   "at": 12.555,
+   "step": "check",
+   "page": "cardplayer.com/uk/betting/non-gamstop",
+   "text": "broken (410)"
+  },
+  {
+   "at": 13.366,
+   "step": "check",
+   "page": "cardplayer.com/uk/online-casinos/best-non-uk-casinos",
+   "text": "couldn't check (blocked 403)"
+  },
+  {
+   "at": 16.03,
+   "step": "check",
+   "page": "cardplayer.com/uk/online-casinos/bitcoin-casinos",
+   "text": "couldn't check (blocked 403)"
+  },
+  {
+   "at": 17.489,
+   "step": "check",
+   "page": "cardplayer.com/de/casinos/plinko-casino",
+   "text": "broken (410)"
+  },
+  {
+   "at": 20.026,
+   "step": "check",
+   "page": "cardplayer.com/nl/casinos",
+   "text": "couldn't check (blocked 403)"
+  },
+  {
+   "at": 21.093,
+   "step": "check",
+   "page": "cardplayer.com/nl/casinos/casino-zonder-cruks",
+   "text": "couldn't check (blocked 403)"
+  },
+  {
+   "at": 24.018,
+   "step": "check",
+   "page": "cardplayer.com/online-casinos",
+   "text": "couldn't check (blocked 403)"
+  },
+  {
+   "at": 25.015,
+   "step": "check",
+   "page": "cardplayer.com/online-casinos/fast-payout-casinos",
+   "text": "couldn't check (blocked 403)"
+  },
+  {
+   "at": 28.017,
+   "step": "check",
+   "page": "cardplayer.com/online-casinos/sweepstakes-casinos",
+   "text": "couldn't check (blocked 403)"
+  },
+  {
+   "at": 29.832,
+   "step": "check",
+   "page": "cardplayer.com/se/casino/trustly",
+   "text": "broken (410 after redirect to /sv/casino-utan-svensk-licens)"
+  },
+  {
+   "at": 30.066,
+   "step": "check",
+   "page": "cardplayer.com/ca/online-casinos/new-casinos",
+   "text": "ok"
+  },
+  {
+   "at": 30.066,
+   "step": "sitemap",
+   "text": "reading the sitemap of cardplayer.com to see which pages are live"
+  },
+  {
+   "at": 72.836,
+   "step": "sitemap",
+   "text": "20 files read, 14007 live pages"
+  },
+  {
+   "at": 72.865,
+   "step": "match",
+   "page": "cardplayer.com/de/casinos/online-casinos-oesterreich",
+   "text": "comparing addresses: no clear match (closest page is too different), closest www.cardplayer.com/poker-news/9729-tribal-casinos-to-offer-online-poker (score 0.20)"
+  },
+  {
+   "at": 75.427,
+   "step": "archive",
+   "page": "cardplayer.com/de/casinos/online-casinos-oesterreich",
+   "text": "the Internet Archive's copy from 20260911 was titled \"Beste Online Casinos Österreich 2026: Vergleich & Test\""
+  },
+  {
+   "at": 75.427,
+   "step": "read",
+   "page": "cardplayer.com/de/casinos/online-casinos-oesterreich",
+   "text": "reading the titles of the 10 closest live pages"
+  },
+  {
+   "at": 85.339,
+   "step": "ask",
+   "page": "cardplayer.com/de/casinos/online-casinos-oesterreich",
+   "text": "asking Gemini which page replaces it, if any"
+  },
+  {
+   "at": 148.54,
+   "step": "decide",
+   "page": "cardplayer.com/de/casinos/online-casinos-oesterreich",
+   "text": "none of them fit: None of the candidates offer a comparison guide for online casinos in Austria.",
+   "thinking": "**Analyzing Replacement URLs for a Missing Austrian Online Casino Page**\n\nOkay, so I need to find a suitable replacement URL for this lost page: `https://cardplayer.com/de/casinos/online-casinos-oesterreich`. It was a German-language comparison of online casinos in Austria, titled \"Beste Online Casinos Österreich 2026: Vergleich & Test\" and described as a comparison and test of the best Austrian casinos.\n\nI've got a list of potential candidates to evaluate: news articles, tournament results, legislative updates, revenue reports, and even a player profile. I'm going through them systematically.\n\n1.  `https://www.cardplayer.com/poker-news/9729-tribal-casinos-to-offer-online-poker` - Doesn't fit. US tribal casinos.\n2.  `https://www.cardplayer.com/poker-news/9763-french-casinos-launch-200-online-poker-brand` - No. French casinos.\n3.  `https://www.cardplayer.com/poker-news/13777-casinos-to-receive-online-poker-licenses-this-fall` - Nope. Nevada online poker licenses.\n4.  `https://www.cardplayer.com/poker-news/9961-pokerstars-partners-with-belgian-casinos-for-online-poker` - Not related. PokerStars in Belgium.\n5.  `https://www.cardplayer.com/poker-news/8017-online-poker-jose-de-la-guardia-wins-sunday-million` - Tournament results, no.\n6.  `https://www.cardplayer.com/poker-news/14214-feltstars-leaves-online-poker` - Doesn't work. FeltStars closing.\n7.  `https://www.cardplayer.com/poker-news/10739-online-poker-legislative-update` - No connection. US legislative news.\n8.  `https://www.cardplayer.com/poker-news/april-revenue-online-casino` - No. US revenue.\n9.  `https://www.cardplayer.com/poker-news/montana-bans-sweepstakes-casinos` - Montana sweepstakes, no.\n10. `https://www.cardplayer.com/poker-news/1808-online-poker-player-profile` - Nope, online poker survey.\n\nNone of these candidates are even remotely suitable. They're all English-language news articles and none of them address a comparison or guide to Austrian online casinos. My rules state that if nothing fits, I need to provide an empty choice. A wrong redirect is worse than no redirect. It's an important consideration.\n\nTherefore, the choice is an empty string. I'm fairly confident that none of these choices are appropriate.\n\nHere's the JSON output:"
+  },
+  {
+   "at": 148.572,
+   "step": "match",
+   "page": "cardplayer.com/uk/betting/non-gamstop",
+   "text": "comparing addresses: no clear match (closest page is too different), closest www.cardplayer.com/poker-news/3067-betfair-launches-grosvenor-uk-poker-tour-betting-market (score 0.17)"
+  },
+  {
+   "at": 150.187,
+   "step": "archive",
+   "page": "cardplayer.com/uk/betting/non-gamstop",
+   "text": "the Internet Archive's copy from 20260727 was titled \"Best Betting Sites Not on GAMSTOP in the UK for 2026\""
+  },
+  {
+   "at": 150.187,
+   "step": "read",
+   "page": "cardplayer.com/uk/betting/non-gamstop",
+   "text": "reading the titles of the 10 closest live pages"
+  },
+  {
+   "at": 159.36,
+   "step": "ask",
+   "page": "cardplayer.com/uk/betting/non-gamstop",
+   "text": "asking Gemini which page replaces it, if any"
+  },
+  {
+   "at": 186.251,
+   "step": "decide",
+   "page": "cardplayer.com/uk/betting/non-gamstop",
+   "text": "none of them fit: None of the candidates offer information about betting sites not on Gamstop, as they are all news articles about poker tournaments or industry business news."
+  },
+  {
+   "at": 186.293,
+   "step": "match",
+   "page": "cardplayer.com/de/casinos/plinko-casino",
+   "text": "comparing addresses: no clear match (closest page is too different), closest www.cardplayer.com/poker-news/13286-grosvenor-casino-owner-to-acquire-gala-casinos (score 0.18)"
+  },
+  {
+   "at": 187.36,
+   "step": "archive",
+   "page": "cardplayer.com/de/casinos/plinko-casino",
+   "text": "the Internet Archive's copy from 20260409 was titled \"Plinko Casinos 2026: Echtgeld Plinko mit top RTP spielen\""
+  },
+  {
+   "at": 187.361,
+   "step": "read",
+   "page": "cardplayer.com/de/casinos/plinko-casino",
+   "text": "reading the titles of the 10 closest live pages"
+  },
+  {
+   "at": 197.335,
+   "step": "ask",
+   "page": "cardplayer.com/de/casinos/plinko-casino",
+   "text": "asking Gemini which page replaces it, if any"
+  },
+  {
+   "at": 222.884,
+   "step": "decide",
+   "page": "cardplayer.com/de/casinos/plinko-casino",
+   "text": "none of them fit: None of the available candidates offer a German guide or listing for Plinko online casinos.",
+   "thinking": "**My Assessment of the Replacement Candidate Search**\n\nOkay, here's the situation: I need to find a suitable replacement for a lost page. The original page was a German-language guide or listing for Plinko casinos – specifically, online casinos that offer real-money Plinko games. It looks like it was aimed at German speakers and provided information on the best sites, safe licenses, bonuses, and potential multipliers.\n\nNow, I've been given a list of potential replacement candidates, and my initial assessment is... none of them are even remotely a good fit. They're all English-language news articles covering a range of topics: acquisitions, revenue reports, legislative actions (like bans and new bills), and game launches. We've got Grosvenor acquiring Gala, smoke-free casinos, online revenue in various states, and even WWE-themed online casino games.\n\nCrucially, none of these candidates are *German*. And more importantly, none of them are *guides or listings*. My internal rule here is pretty clear: simply mentioning Plinko or the general casino theme isn't enough. I need a *guide* or a dedicated page similar in nature to the original. A news article that *mentions* the topic doesn't cut it. A redirect that goes to the wrong place is worse than no redirect at all.\n\nTherefore, the only reasonable choice here is to leave the replacement empty. The correct response is \"\". I'm confident about this. It's a clear miss."
+  },
+  {
+   "at": 222.917,
+   "step": "match",
+   "page": "cardplayer.com/se/casino/trustly",
+   "text": "comparing addresses: no clear match (closest page is too different), closest www.cardplayer.com/poker-news/april-revenue-online-casino (score 0.12)"
+  },
+  {
+   "at": 226.254,
+   "step": "archive",
+   "page": "cardplayer.com/se/casino/trustly",
+   "text": "the Internet Archive's copy from 20260831 was titled \"Casino utan svensk licens 2026 - Bästa casino utan Spelpaus\""
+  },
+  {
+   "at": 226.254,
+   "step": "read",
+   "page": "cardplayer.com/se/casino/trustly",
+   "text": "reading the titles of the 10 closest live pages"
+  },
+  {
+   "at": 235.344,
+   "step": "ask",
+   "page": "cardplayer.com/se/casino/trustly",
+   "text": "asking Gemini which page replaces it, if any"
+  },
+  {
+   "at": 302.241,
+   "step": "decide",
+   "page": "cardplayer.com/se/casino/trustly",
+   "text": "none of them fit: None of the candidates match the Swedish online casino guide topic.",
+   "thinking": "**Analyzing the Candidate Links**\n\nOkay, here's the situation. I've got this lost page – `https://cardplayer.com/se/casino/trustly` – a Swedish-language guide focused on casinos *without* Swedish licenses and specifically mentions Trustly payments. I need to find the best match amongst these candidate links.\n\nLooking at the list: We've got articles on US online casino revenue, Nevada casino revenue, a new Illinois casino, WWE casino games, a UK casino deal, an Ohio online casino bill, and some poker room pieces. There's also a couple of Normandie casino promotion articles.\n\nHmm. None of these are a direct fit. They're all pretty specific news items, mainly focused on the US and UK markets and the focus is around news rather than the function or how-to of the Swedish guide. They're not a central hub for information for Swedish users wanting to find casinos without a license.\n\nGiven the rule – \"If nothing fits, answer with an empty choice. A wrong redirect is worse than none.\" – the correct choice is obviously going to be an empty string. The confidence level is high because there's absolutely no overlap in topic or intention between the candidates and the target page. The reason is simple: none of these articles are a Swedish casino guide."
+  },
+  {
+   "at": 302.242,
+   "step": "done",
+   "text": "finished in 302.2s"
+  }
+ ],
+ "file": {
+  "path": "vercel.json",
+  "before": "{\n  \"cleanUrls\": true,\n  \"trailingSlash\": false\n}\n",
+  "after": "{\n  \"cleanUrls\": true,\n  \"trailingSlash\": false\n}\n"
+ }
+}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { Check, ChevronDown, FastForward, Pause, Play, RotateCcw, X } from "lucide-react";
+import { CONNECT_STEP, PullRequestPanel } from "./agent-pr";
 import {
   DEFAULT_SITE,
   RUNS,
@@ -10,6 +11,7 @@ import {
   TYPE_RATE,
   diffLines,
   pathOf,
+  prSchedule,
   realTime,
   schedule,
   stageOf,
@@ -27,6 +29,7 @@ export function Agent() {
   const [status, setStatus] = useState<Status>("idle");
   const [speed, setSpeed] = useState(1);
   const [now, setNow] = useState(0);
+  const [prT, setPrT] = useState(-1);
   const times = useMemo(() => schedule(run.steps), [run]);
   const end = useMemo(() => {
     const last = run.steps.length - 1;
@@ -44,6 +47,7 @@ export function Agent() {
     setInput(key);
     setRun(next);
     setNow(0);
+    setPrT(-1);
     setStatus("running");
   }, []);
 
@@ -73,9 +77,43 @@ export function Agent() {
     return () => cancelAnimationFrame(frame);
   }, [status, speed, end]);
 
+  const prTimes = useMemo(() => (run.pr ? prSchedule(run.pr.steps) : []), [run]);
+  const prEnd = 3 * CONNECT_STEP + (prTimes[prTimes.length - 1] ?? 0) + 0.5;
+  const prRunning = prT >= 0 && prT < prEnd;
+  useEffect(() => {
+    if (!prRunning) return;
+    let frame = 0;
+    let last = performance.now();
+    const tick = (t: number) => {
+      const dt = ((t - last) / 1000) * speed;
+      last = t;
+      setPrT((v) => Math.min(prEnd, v + dt));
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [prRunning, prEnd, speed]);
+  const prSteps: Step[] = (run.pr?.steps ?? [])
+    .map((s, i) => ({ at: s.at ?? NaN, step: "github", text: s.text, due: 3 * CONNECT_STEP + prTimes[i] }))
+    .filter((s) => prT >= s.due)
+    .map(({ at, step, text }) => ({ at, step, text }));
+
   const shown = run.steps.filter((_, i) => status !== "idle" && times[i] <= now);
   const clock = status === "done" ? run.tookMs / 1000 : realTime(run.steps, times, now);
   const current = shown.length ? stageOf(shown[shown.length - 1].step) : -1;
+  const prDone = prT >= prEnd;
+  const stage =
+    status === "idle"
+      ? { active: -1, passed: 0, note: "" }
+      : status !== "done"
+        ? { active: current, passed: Math.max(0, current), note: "" }
+        : !run.pr
+          ? { active: -1, passed: 4, note: "not needed" }
+          : prT < 0
+            ? { active: -1, passed: 4, note: "ready" }
+            : prDone
+              ? { active: -1, passed: 5, note: "" }
+              : { active: 4, passed: 4, note: "" };
   const found = run.problems.filter((p) => shown.some((s) => s.step === "check" && s.page === p.page));
   const states = found.map((p) => ({ p, state: problemState(p, shown) }));
   const redirects = states.filter((s) => s.state === "redirect").length;
@@ -91,7 +129,7 @@ export function Agent() {
         </h1>
         <p className="mt-3 max-w-2xl text-zinc-400">
           It checks a site&apos;s most linked pages from the backlink index, matches each dead page to a live one, asks Gemini
-          only when the match is unclear, and writes the redirect into the site&apos;s config.
+          only when the match is unclear, writes the redirect into the site&apos;s config, and opens a pull request for the owner to review.
         </p>
       </section>
 
@@ -120,6 +158,20 @@ export function Agent() {
           {status === "done" ? "Run again" : "Run agent"}
         </button>
       </form>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+        <span>Recorded runs:</span>
+        {Object.keys(RUNS).map((site) => (
+          <button
+            key={site}
+            onClick={() => start(site)}
+            className={`rounded-full border px-2.5 py-1 font-mono transition ${
+              site === run.site ? "border-blue-500/50 text-blue-200" : "border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-100"
+            }`}
+          >
+            {site}
+          </button>
+        ))}
+      </div>
       {unknown && (
         <p className="mt-2 text-sm text-zinc-400">
           This demo has a run for {Object.keys(RUNS).join(", ")}. {unknown} isn&apos;t one of them yet.
@@ -133,15 +185,17 @@ export function Agent() {
         <Stat label="Gemini asked" value={`${asked}`} />
       </div>
 
-      <Stages current={status === "idle" ? -1 : current} done={status === "done"} />
+      <Stages {...stage} />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.3fr_1fr]">
-        <Timeline run={run} shown={shown} times={times} now={now} status={status} />
+        <Timeline run={run} shown={shown} extra={prSteps} times={times} now={now} status={status} />
         <div className="flex flex-col gap-6">
-          <Findings run={run} states={states} />
-          <Change run={run} ready={states.some((s) => s.state === "redirect")} />
+          <Findings run={run} states={states} blocked={shown.filter((s) => s.step === "check" && s.text.startsWith("couldn't check")).length} />
+          <Change run={run} ready={states.some((s) => s.state === "redirect")} done={status === "done"} />
         </div>
       </div>
+
+      {status === "done" && <PullRequestPanel run={run} t={prT} onOpen={() => setPrT(0)} />}
 
       <div className="mt-6 flex flex-wrap items-center justify-end gap-3 text-xs text-zinc-500">
         <div className="flex items-center gap-2">
@@ -159,6 +213,7 @@ export function Agent() {
             onClick={() => {
               setNow(end);
               setStatus("done");
+              if (prT >= 0) setPrT(prEnd);
             }}
             label="Skip to end"
           >
@@ -208,29 +263,29 @@ function Stat({ label, value, total, accent }: { label: string; value: string; t
   );
 }
 
-function Stages({ current, done }: { current: number; done: boolean }) {
+function Stages({ active, passed, note }: { active: number; passed: number; note: string }) {
   return (
     <ol className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-5">
       {STAGES.map((s, i) => {
-        const soon = "soon" in s && s.soon;
-        const active = !done && i === current;
-        const passed = (done && !soon) || (current > i && !soon);
+        const on = i === active;
+        const ok = !on && i < passed;
+        const last = i === STAGES.length - 1;
         return (
           <li
             key={s.id}
             className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${
-              active
+              on
                 ? "border-blue-500/60 bg-blue-500/10 text-blue-200"
-                : passed
+                : ok
                   ? "border-zinc-800 bg-zinc-900/40 text-zinc-300"
                   : "border-dashed border-zinc-800 text-zinc-500"
             }`}
           >
             <span className="font-mono text-zinc-500">{i + 1}</span>
             <span className="flex-1">{s.label}</span>
-            {passed && <Check className="size-3.5 text-emerald-400" aria-hidden="true" />}
-            {active && <span className="size-1.5 animate-pulse rounded-full bg-blue-400" />}
-            {soon && <span className="text-[10px] uppercase tracking-wide text-zinc-600">next</span>}
+            {ok && <Check className="size-3.5 text-emerald-400" aria-hidden="true" />}
+            {on && <span className="size-1.5 animate-pulse rounded-full bg-blue-400" />}
+            {last && !on && !ok && note && <span className="text-[10px] uppercase tracking-wide text-zinc-600">{note}</span>}
           </li>
         );
       })}
@@ -238,14 +293,14 @@ function Stages({ current, done }: { current: number; done: boolean }) {
   );
 }
 
-function Timeline({ run, shown, times, now, status }: { run: Run; shown: Step[]; times: number[]; now: number; status: Status }) {
+function Timeline({ run, shown, extra, times, now, status }: { run: Run; shown: Step[]; extra: Step[]; times: number[]; now: number; status: Status }) {
   const box = useRef<HTMLDivElement>(null);
   const last = shown[shown.length - 1];
   const waiting = status !== "done" && last && (last.step === "ask" || (last.step === "sitemap" && !last.text.includes("files read")));
   useEffect(() => {
     const el = box.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [shown.length, now]);
+  }, [shown.length, extra.length, now]);
 
   return (
     <section className="flex min-h-0 flex-col rounded-2xl border border-zinc-800 bg-zinc-950/60">
@@ -259,6 +314,9 @@ function Timeline({ run, shown, times, now, status }: { run: Run; shown: Step[];
           const i = run.steps.indexOf(s);
           return <StepRow key={i} s={s} site={run.site} typed={s.thinking ? Math.floor((now - times[i]) * TYPE_RATE) : 0} />;
         })}
+        {extra.map((s, i) => (
+          <StepRow key={`pr-${i}`} s={s} site={run.site} typed={0} />
+        ))}
         {waiting && (
           <div className="mt-1 flex items-center gap-2 pl-[4.5rem] text-zinc-500">
             <span className="size-1.5 animate-pulse rounded-full bg-blue-400" />
@@ -280,6 +338,7 @@ const TAG: Record<string, string> = {
   decide: "text-violet-300",
   done: "text-emerald-300",
   start: "text-zinc-400",
+  github: "text-emerald-300",
 };
 
 function StepRow({ s, site, typed }: { s: Step; site: string; typed: number }) {
@@ -288,7 +347,7 @@ function StepRow({ s, site, typed }: { s: Step; site: string; typed: number }) {
   return (
     <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="py-0.5">
       <div className="grid grid-cols-[3.25rem_4.25rem_1fr] gap-x-2">
-        <span className="text-right tabular-nums text-zinc-600">{s.at.toFixed(1)}s</span>
+        <span className="text-right tabular-nums text-zinc-600">{Number.isFinite(s.at) ? `${s.at.toFixed(1)}s` : ""}</span>
         <span className={TAG[s.step] ?? "text-zinc-400"}>{s.step}</span>
         <span className={bad ? "text-amber-300" : s.step === "check" ? "text-zinc-400" : "text-zinc-200"}>
           {s.page && <span className="text-zinc-500">{pathOf(s.page, site)} </span>}
@@ -339,7 +398,7 @@ const STATE_LABEL: Record<State, string> = {
   none: "no good replacement",
 };
 
-function Findings({ run, states }: { run: Run; states: { p: Problem; state: State }[] }) {
+function Findings({ run, states, blocked }: { run: Run; states: { p: Problem; state: State }[]; blocked: number }) {
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/30">
       <header className="border-b border-zinc-800 px-4 py-3">
@@ -374,6 +433,12 @@ function Findings({ run, states }: { run: Run; states: { p: Problem; state: Stat
           ))}
         </ul>
       )}
+      {blocked > 0 && (
+        <p className="border-t border-zinc-800 px-4 py-2.5 text-xs text-zinc-500">
+          {blocked} {blocked === 1 ? "page" : "pages"} couldn&apos;t be checked because the site blocked the checker (403). They&apos;re
+          skipped, not guessed.
+        </p>
+      )}
     </section>
   );
 }
@@ -396,7 +461,7 @@ function StateBadge({ state }: { state: State }) {
   );
 }
 
-function Change({ run, ready }: { run: Run; ready: boolean }) {
+function Change({ run, ready, done }: { run: Run; ready: boolean; done: boolean }) {
   const lines = useMemo(() => diffLines(run.file.before, run.file.after), [run]);
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/30">
@@ -420,8 +485,10 @@ function Change({ run, ready }: { run: Run; ready: boolean }) {
       </pre>
       <p className="border-t border-zinc-800 px-4 py-2.5 text-xs text-zinc-500">
         {ready
-          ? "Permanent redirect, added above existing rules. Next: open this as a pull request for the site owner to review."
-          : "Waiting for a redirect to propose."}
+          ? "Permanent redirect, added above existing rules, ready to open as a pull request."
+          : done
+            ? "No redirects to add. None of the broken pages had a good replacement."
+            : "Waiting for a redirect to propose."}
       </p>
     </section>
   );
