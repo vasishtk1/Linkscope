@@ -157,7 +157,9 @@ The header on every page: the logo (a link home, which also clears a search) plu
 
 ### `linkscope.tsx` — `Linkscope`
 
-The page. Reads `?d=` from the URL and fetches `/api/lookup`. The page state (idle, loading, found, missing, error) is derived from the URL plus the last answer, rather than stored separately, so it can never fall out of sync with the address bar. Old requests are cancelled with an `AbortController` when the search changes.
+The page. Reads `?d=` from the URL and fetches `/api/lookup`. The page state (idle, loading, found, missing, offline, error) is derived from the URL plus the last answer, rather than stored separately, so it can never fall out of sync with the address bar. Old requests are cancelled with an `AbortController` when the search changes.
+
+When the lookup route answers `503` (the Go API can't be reached, as on Vercel until it's hosted), `Offline` says live search is coming online soon and links to `/agent`, so a visitor never lands on a dead end. Other failures still show "Something went wrong".
 
 When a site is found, it's saved with `saveSearch`. The Stats section shows `StatCards`, then `TopPages` if the answer has top pages, then `BacklinksTable`. `HowWeFound` shows below the table if the answer has origins.
 

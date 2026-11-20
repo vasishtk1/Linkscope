@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Play } from "lucide-react";
+import { ArrowRight, Play } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import type { Lookup } from "@/lib/types";
 import { SearchBar } from "./search-bar";
@@ -16,7 +16,7 @@ import { NetworkBackground } from "./network-background";
 import { SiteHeader } from "./site-header";
 import { saveSearch } from "@/lib/searches";
 
-type Outcome = { kind: "found"; data: Lookup } | { kind: "missing" } | { kind: "error" };
+type Outcome = { kind: "found"; data: Lookup } | { kind: "missing" } | { kind: "offline" } | { kind: "error" };
 type State = { kind: "idle" } | { kind: "loading" } | Outcome;
 
 const EXAMPLES = ["github.com", "wikipedia.org", "openstreetmap.org", "mozilla.org"];
@@ -40,6 +40,7 @@ export function Linkscope() {
     fetch(`/api/lookup?domain=${encodeURIComponent(query)}`, { signal: ctrl.signal })
       .then(async (res) => {
         if (res.status === 404) return done({ kind: "missing" });
+        if (res.status === 503) return done({ kind: "offline" });
         if (!res.ok) return done({ kind: "error" });
         const data: Lookup = await res.json();
         saveSearch(data);
@@ -126,6 +127,7 @@ export function Linkscope() {
             yet.
           </Message>
         )}
+        {state.kind === "offline" && <Offline />}
         {state.kind === "error" && <Message>Something went wrong looking that up. Try again.</Message>}
 
         {state.kind === "found" && <Results key={state.data.domain} data={state.data} />}
@@ -185,6 +187,28 @@ function HowWeFound({ data }: { data: Lookup }) {
         <Play className="h-4 w-4" fill="currentColor" /> Watch how
       </Link>
     </section>
+  );
+}
+
+// Offline is shown when the lookup service can't be reached, so a visitor gets somewhere to go instead of an error.
+function Offline() {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="mx-auto flex max-w-xl flex-col items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 px-5 py-5 text-center"
+    >
+      <p className="text-sm text-zinc-400">
+        Live search is coming online soon. The backlink index is moving to its own server. Meanwhile, you can watch the agent find
+        broken pages and open a pull request to fix them.
+      </p>
+      <Link
+        href="/agent"
+        className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-blue-400"
+      >
+        Watch the agent work <ArrowRight className="h-4 w-4" aria-hidden="true" />
+      </Link>
+    </motion.div>
   );
 }
 
